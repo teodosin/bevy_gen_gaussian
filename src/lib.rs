@@ -1,6 +1,7 @@
 pub mod constants;
 pub mod voxel;
 pub mod edit;
+pub mod sdf;
 pub mod extraction;
 pub mod billboard;
 pub mod metrics;
@@ -36,6 +37,7 @@ impl Plugin for GenGaussianPlugin {
 // Public API exports
 pub use voxel::{Voxel, VoxelChunkSimple};
 pub use edit::{EditOp, EditBatch, VoxelWorld, queue_set};
+pub use sdf::{BrushSettings, BrushMode, apply_sphere_brush, apply_box_brush, cast_editing_ray, RaycastMode, generate_terrain};
 pub use extraction::LastInstanceCount;
 pub use billboard::BillboardTag;
 pub use metrics::Metrics;
