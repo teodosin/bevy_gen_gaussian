@@ -20,8 +20,17 @@ pub fn extract_surface(
     if !voxel_world.dirty { return; }
 
     surface_buffer.instances.clear();
+    
+    // Debug: Check total count manually
+    let total_count = voxel_world.chunk.count();
+    println!("Surface extraction: chunk reports {} voxels", total_count);
+    
+    // Debug: Try to get a specific voxel that should exist
+    let test_voxel = voxel_world.chunk.get(IVec3::new(0, 0, 0));
+    println!("Test voxel at (0,0,0): {:?}", test_voxel);
+    
     surface_buffer.instances.extend(
-        voxel_world.chunk.iter().map(|position| {
+        voxel_world.chunk.iter().map(|(position, _voxel_data)| {
             // Enhanced depth-based coloring for better visual feedback
             let depth = position.y as f32 / 32.0; // 0.0 at bottom, 1.0 at top
             
