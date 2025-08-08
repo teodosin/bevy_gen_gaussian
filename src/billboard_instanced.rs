@@ -78,7 +78,7 @@ pub fn manage_billboard_instances(
         surface_buffer.dirty = false;
         return;
     }
-    
+
     // Update color buffer with new data
     let colors: Vec<[f32; 4]> = surface_buffer.instances.iter()
         .map(|instance| [
@@ -109,6 +109,6 @@ pub fn manage_billboard_instances(
     }
     
     // Reset dirty flag and log result
-    surface_buffer.dirty = false;
     println!("Instanced billboards: spawned {} instances", surface_buffer.instances.len());
+    surface_buffer.dirty = false;
 }

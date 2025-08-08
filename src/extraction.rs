@@ -30,11 +30,13 @@ pub fn extract_surface(
     println!("Test voxel at (0,0,0): {:?}", test_voxel);
     
     surface_buffer.instances.extend(
-        voxel_world.chunk.iter().map(|(position, _voxel_data)| {
-            // Enhanced depth-based coloring for better visual feedback
+        voxel_world.chunk.iter().map(|(position, voxel_data)| {
+            // Enhanced depth-based coloring with material variation
             let depth = position.y as f32 / 32.0; // 0.0 at bottom, 1.0 at top
+            let material_id = voxel_data.material;
             
-            let color = if depth < 0.3 {
+            // Base color from depth
+            let base_color = if depth < 0.3 {
                 // Lower levels: Red tones (underground/foundation)
                 Color::srgb(
                     0.8 + depth * 0.2,     // 0.8 - 1.0 red
@@ -59,13 +61,24 @@ pub fn extract_surface(
                 )
             };
             
+            // Add material-based variation for visual interest
+            let rgba = base_color.to_srgba();
+            let material_color = match material_id % 5 {
+                0 => base_color, // Keep base color
+                1 => Color::srgb(rgba.red * 1.2, rgba.green * 0.8, rgba.blue * 0.9), // Redder
+                2 => Color::srgb(rgba.red * 0.8, rgba.green * 1.2, rgba.blue * 0.9), // Greener
+                3 => Color::srgb(rgba.red * 0.9, rgba.green * 0.8, rgba.blue * 1.2), // Bluer
+                4 => Color::srgb(rgba.red * 1.1, rgba.green * 1.1, rgba.blue * 0.7), // Yellower
+                _ => base_color,
+            };
+            
             BillboardInstance {
                 pos: Vec3::new(
                     position.x as f32 + 0.5, 
                     position.y as f32 + 0.5, 
                     position.z as f32 + 0.5
                 ),
-                color: color.to_srgba().to_u8_array(),
+                color: material_color.to_srgba().to_u8_array(),
             }
         })
     );
