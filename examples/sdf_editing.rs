@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_gen_gaussian::{
     GenGaussianPlugin,
-    EditOp, EditBatch, VoxelWorld, LastInstanceCount, Metrics,
+    EditOp, EditBatch, LastInstanceCount, Metrics,
     BrushSettings, BrushMode, apply_sphere_brush, generate_terrain,
 };
 use bevy_panorbit_camera::PanOrbitCamera;
@@ -38,7 +38,6 @@ fn main() {
             sdf_input_system, 
             procedural_generation, 
             brush_ui_system,
-            draw_debug, 
             update_info_text
         ))
         .run();
@@ -354,15 +353,4 @@ fn update_info_text(
         metrics.edits_applied,
         time.elapsed_secs()
     );
-}
-
-fn draw_debug(world: Res<VoxelWorld>, mut gizmos: Gizmos) {
-    // Draw voxel debug visualization - this will only render to 3D cameras automatically
-    for p in world.chunk.iter() {
-        gizmos.cuboid(
-            Transform::from_xyz(p.x as f32 + 0.5, p.y as f32 + 0.5, p.z as f32 + 0.5)
-                .with_scale(Vec3::splat(0.9)), 
-            Color::srgb(0.2, 0.7, 1.0)
-        );
-    }
 }

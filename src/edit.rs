@@ -25,12 +25,10 @@ pub fn apply_edits(mut world: ResMut<VoxelWorld>, mut batch: ResMut<EditBatch>, 
             EditOp::Set(p) => {
                 world.chunk.set(p, 1);
                 applied += 1;
-                println!("apply_edits: set at {:?}", p);
             },
             EditOp::Clear(p) => {
                 world.chunk.clear(p);
                 applied += 1;
-                println!("apply_edits: clear at {:?}", p);
             }
         }
     }
