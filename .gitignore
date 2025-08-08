@@ -1,0 +1,18 @@
+# Rust and Cargo
+/target/
+Cargo.lock
+
+# Wasm
+/pkg/
+/www/dist/
+/www/pkg/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
