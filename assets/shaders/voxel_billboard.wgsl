@@ -12,6 +12,7 @@ struct Vertex {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_position: vec4<f32>,
+    @location(1) color: vec4<f32>,
 };
 
 @vertex
@@ -23,6 +24,15 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     
     // Extract the billboard center position from the transform
     let billboard_center = world_from_local[3].xyz;
+    
+    // Generate color based on world position for variety
+    let color_base = billboard_center * 0.1; // Scale down world coords
+    let instance_color = vec4<f32>(
+        abs(sin(color_base.x)) * 0.7 + 0.3,
+        abs(sin(color_base.y + 2.0)) * 0.7 + 0.3,
+        abs(sin(color_base.z + 4.0)) * 0.7 + 0.3,
+        1.0
+    );
     
     // Create billboard-aligned vectors
     let camera_position = view.world_position.xyz;
@@ -40,12 +50,12 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     
     out.world_position = vec4<f32>(billboard_pos, 1.0);
     out.clip_position = position_world_to_clip(billboard_pos);
+    out.color = instance_color;
     
     return out;
 }
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Simple bright magenta to test visibility
-    return vec4<f32>(1.0, 0.0, 1.0, 1.0);
+    return in.color;
 }

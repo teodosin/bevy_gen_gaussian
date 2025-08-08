@@ -18,7 +18,7 @@ pub struct VoxelBillboardAssets {
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct VoxelBillboardMaterial {
-    // Empty for now - just a basic material for testing
+    // Simple material for camera-facing billboards
 }
 
 impl Material for VoxelBillboardMaterial {
@@ -44,9 +44,9 @@ pub fn setup_instanced_billboards(
     // Create billboard mesh (larger square for visibility)
     let mesh = meshes.add(Rectangle::new(2.0, 2.0));
     
-    // Create material with storage buffer
+    // Create simple material
     let material = materials.add(VoxelBillboardMaterial {
-        // Empty for testing
+        // Simple material for testing
     });
     
     println!("Setup: Created billboard material and mesh assets");
@@ -93,7 +93,7 @@ pub fn manage_billboard_instances(
         buffer.set_data(&colors);
     }
     
-    // Spawn billboard instances for visibility test
+    // Spawn camera-facing billboard instances
     for (i, instance) in surface_buffer.instances.iter().enumerate() {
         commands.spawn((
             Mesh3d(billboard_assets.mesh.clone()),
