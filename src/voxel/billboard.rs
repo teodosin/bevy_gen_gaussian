@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-use crate::extraction::SurfaceBuffer;
-use crate::metrics::Metrics;
+use super::extraction::SurfaceBuffer;
+use super::metrics::Metrics;
 use bevy::render::render_resource::{Buffer, BufferUsages};
 use bevy::render::renderer::RenderDevice;
 use bevy::render::render_resource::BufferInitDescriptor; // re-exported type

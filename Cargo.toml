@@ -25,7 +25,7 @@ sdf_optim3 = []
 # Updated Bevy to 0.16.1 and fixed feature name to multi_threaded
 bevy = { version = "0.16.1", default-features = false, features = ["bevy_winit","x11","png","tonemapping_luts","multi_threaded","bevy_pbr","bevy_gizmos","bevy_ui","default_font"] }
 bevy_panorbit_camera = { path = "../bevy_panorbit_camera" }
-bevy_gaussian_splatting = { path = "../bevy_gaussian_splatting", optional = true }
+bevy_gaussian_splatting = { path = "../bevy_gaussian_splatting" }
 bytemuck = { version = "1.15", features = ["derive"] }
 # (removed direct wgpu dependency; use Bevy re-export)
 

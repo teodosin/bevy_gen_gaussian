@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-use crate::edit::VoxelWorld;
-use crate::metrics::Metrics;
+use super::edit::VoxelWorld;
+use super::metrics::Metrics;
 
 #[derive(Clone, Copy)]
 pub struct BillboardInstance { pub pos: Vec3, pub color: [u8;4] }

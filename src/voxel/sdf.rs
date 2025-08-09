@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::edit::{EditBatch, EditOp};
+use super::edit::{EditBatch, EditOp};
 
 /// Different SDF brush modes for voxel editing
 #[derive(Debug, Clone, Copy)]

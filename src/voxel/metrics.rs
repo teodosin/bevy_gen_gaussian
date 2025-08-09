@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::edit::VoxelWorld;
+use super::edit::VoxelWorld;
 
 #[derive(Resource, Default, Debug)]
 pub struct Metrics {

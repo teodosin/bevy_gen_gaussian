@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::metrics::Metrics;
+use super::metrics::Metrics;
 
 #[derive(Component)]
 struct DebugOverlayRoot;

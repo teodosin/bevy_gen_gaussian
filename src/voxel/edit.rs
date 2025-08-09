@@ -1,7 +1,7 @@
 use bevy::prelude::*;
-use crate::voxel::*;
+use super::grid::*;
 use bevy::math::IVec3;
-use crate::metrics::Metrics;
+use super::metrics::Metrics;
 
 #[derive(Clone, Copy)]
 pub enum EditOp { Set(IVec3), Clear(IVec3) }

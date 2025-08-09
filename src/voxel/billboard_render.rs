@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::extraction::SurfaceBuffer;
+use super::extraction::SurfaceBuffer;
 
 #[derive(Component)]
 pub struct VoxelBillboard;

@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use bevy::render::storage::ShaderStorageBuffer;
 use bevy::reflect::TypePath;
-use crate::extraction::SurfaceBuffer;
+use super::extraction::SurfaceBuffer;
 
 const SHADER_ASSET_PATH: &str = "shaders/voxel_billboard.wgsl";
 
