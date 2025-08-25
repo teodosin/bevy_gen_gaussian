@@ -1,5 +1,9 @@
 use bevy::prelude::*;
 
+
+
+
+
 /// Trait for signed distance functions
 pub trait SDF: Send + Sync {
     fn distance(&self, point: Vec3) -> f32;
@@ -7,6 +11,10 @@ pub trait SDF: Send + Sync {
 
 /// A boxed SDF for dynamic dispatch
 pub type BoxedSDF = Box<dyn SDF>;
+
+
+
+
 
 /// Sphere SDF
 #[derive(Debug, Clone)]
@@ -20,6 +28,10 @@ impl SDF for SphereSDF {
         (point - self.center).length() - self.radius
     }
 }
+
+
+
+
 
 /// Box SDF
 #[derive(Debug, Clone)]
@@ -35,6 +47,10 @@ impl SDF for BoxSDF {
     }
 }
 
+
+
+
+
 /// Plane SDF
 #[derive(Debug, Clone)]
 pub struct PlaneSDF {
@@ -47,6 +63,10 @@ impl SDF for PlaneSDF {
         point.dot(self.normal) - self.distance
     }
 }
+
+
+
+
 
 /// Cylinder SDF
 #[derive(Debug, Clone)]
@@ -69,6 +89,10 @@ impl SDF for CylinderSDF {
         }
     }
 }
+
+
+
+
 
 /// Convenience functions for creating common SDFs
 

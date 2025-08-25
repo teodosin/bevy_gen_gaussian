@@ -3,9 +3,13 @@ use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
 use bevy_gaussian_splatting::Gaussian3d;
 
-use crate::gaussian::settings::{MeshConversionSettings, PointCloudSettings, ColorMode};
+use crate::gaussian::settings::{MeshConversionSettings, PointCloudSettings};
 
-/// Convert a mesh into Gaussian3d instances for vertices, edges, and faces
+
+
+
+
+/// Convert a mesh into Gaussian3d instances for vertices, edges, and faces, on the CPU. 
 /// 
 /// This is a pure function that takes a mesh and produces gaussians without side effects.
 /// It can generate gaussians for vertices, edges (connecting vertices), and faces (triangle centers).
@@ -131,6 +135,10 @@ pub fn mesh_to_gaussians(
     out
 }
 
+
+
+
+
 /// Convert a point cloud (positions + optional normals) to Gaussians
 pub fn points_to_gaussians(
     positions: &[Vec3],
@@ -164,6 +172,10 @@ pub fn points_to_gaussians(
     out
 }
 
+
+
+
+
 // Helper function to get triangles from indices based on topology
 fn triangles_from(topology: PrimitiveTopology, indices: &[u32]) -> impl Iterator<Item = [u32; 3]> + '_ {
     match topology {
@@ -178,8 +190,12 @@ fn triangles_from(topology: PrimitiveTopology, indices: &[u32]) -> impl Iterator
     }
 }
 
-// --- Mesh attribute readers ---
 
+
+
+
+// --- Mesh attribute readers ---
+// 
 fn read_positions(mesh: &Mesh) -> Option<Vec<Vec3>> {
     let attr = Mesh::ATTRIBUTE_POSITION;
     mesh.attribute(attr).and_then(|a| {

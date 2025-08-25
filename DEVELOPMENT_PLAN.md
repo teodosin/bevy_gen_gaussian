@@ -153,12 +153,45 @@ src/
     └── visualizer.rs   # visualization helpers
 ```
 
-## Next Steps
+## GPU Compute Pipeline Strategy
 
-1. Create the new modular structure
-2. Extract and clean up mesh_to_gaussians from the example
-3. Implement basic gaussian transformation functions
-4. Add comprehensive documentation and examples
-5. Create integration tests showing the composability
+### Phase 1: Performance Baseline & GPU Foundation
+1. **Add timing measurements to current CPU mesh conversion example**
+   - Log conversion time: "Converted X vertices, Y edges, Z faces → N gaussians in T ms"
+   - Add UI display: "Conversion time: X ms" in debug overlay
+   - Establish performance baseline for GPU comparison
 
-This plan prioritizes modularity, composability, and clean APIs while building on the existing work in a more organized way.
+2. **Create GPU mesh-to-gaussian compute shader example**
+   - Model after existing `particle.rs`/`particle.wgsl` infrastructure
+   - Static mesh conversion (one-shot): vertices → gaussians
+   - Use storage buffers for mesh data input, gaussian data output
+   - Compare GPU vs CPU performance
+
+### Phase 2: Dynamic Mesh Tracking
+3. **Implement mesh change detection system**
+   - Monitor mesh transform/animation changes
+   - Re-run conversion compute shader only when needed
+   - For skinned meshes: convert post-deformation
+
+4. **Optimize compute pipeline**
+   - Variable-size output allocation strategies
+   - Workgroup optimization for different mesh sizes
+   - Memory management between CPU/GPU boundaries
+
+### Architecture Notes
+- **Static Conversion**: Deterministic output size (vertices + edges + faces)
+- **Dynamic Tracking**: Leverages Bevy's existing mesh skinning, converts post-morph
+- **Integration**: Uses existing gaussian rendering pipeline, follows particle system pattern
+- **Fallback**: CPU implementation remains as reference/fallback
+
+## Next Steps (Updated Priority)
+
+1. **[IMMEDIATE]** Add timing measurements to CPU example
+2. **[IMMEDIATE]** Create GPU compute mesh conversion example
+3. Create the new modular structure for `bevy_gen_gaussian`
+4. Extract and clean up mesh_to_gaussians from examples
+5. Implement basic gaussian transformation functions
+6. Add comprehensive documentation and examples
+7. Create integration tests showing the composability
+
+This plan prioritizes getting GPU compute pipelines working first to establish the performance foundation, then building the clean API structure around proven GPU-accelerated implementations.

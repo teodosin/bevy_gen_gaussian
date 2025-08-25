@@ -3,6 +3,10 @@ use bevy_gaussian_splatting::Gaussian3d;
 use super::primitives::{SDF, BoxedSDF};
 use crate::gaussian::settings::PointCloudSettings;
 
+
+
+
+
 /// Settings for SDF to Gaussian conversion
 #[derive(Debug, Clone)]
 pub struct SDFConversionSettings {
@@ -32,6 +36,10 @@ impl Default for SDFConversionSettings {
         }
     }
 }
+
+
+
+
 
 /// Convert an SDF to a cloud of Gaussians by sampling it on a grid
 pub fn sdf_to_gaussians(sdf: &BoxedSDF, settings: &SDFConversionSettings) -> Vec<Gaussian3d> {
