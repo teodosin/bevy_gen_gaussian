@@ -22,7 +22,7 @@ pub use conversion::*;
 /// Component to hold a list of SDF edits. 
 #[derive(Component)]
 pub struct SDFList {
-    pub sdfs: Vec<Box<dyn SDF>>,
+    pub sdfs: Vec<SDFEdit>,
 }
 
 

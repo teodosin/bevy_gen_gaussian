@@ -28,8 +28,8 @@ pub use gaussian::*;
 /// Prelude module for convenient imports
 pub mod prelude {
     pub use crate::gaussian::{
-        creation::*,
-        transform::*,
+        cpu_mesh_to_gaussians::*,
+        cpu_transform::*,
         settings::*,
     };
     pub use bevy_gaussian_splatting::{

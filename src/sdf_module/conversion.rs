@@ -77,13 +77,17 @@ pub fn sdf_to_gaussians(sdf: &BoxedSDF, settings: &SDFConversionSettings) -> Vec
     }
     
     // Convert points to gaussians
-    crate::gaussian::creation::points_to_gaussians(
+    crate::gaussian::cpu_mesh_to_gaussians::points_to_gaussians(
         &positions,
         Some(&normals),
         Transform::IDENTITY,
         &settings.gaussian_settings,
     )
 }
+
+
+
+
 
 /// Compute the normal at a point on an SDF surface using finite differences
 fn compute_sdf_normal(sdf: &BoxedSDF, pos: Vec3, epsilon: f32) -> Vec3 {
