@@ -4,12 +4,17 @@ pub mod sdf_module;
 pub mod debug;
 
 use bevy::prelude::*;
+use bevy_gaussian_splatting::GaussianSplattingPlugin;
 
 pub struct GenGaussianPlugin;
 
 impl Plugin for GenGaussianPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(voxel::VoxelPlugin);
+    // Do not add voxel plugin by default; it's orthogonal and can panic if not configured.
+    // Ensure the gaussian splatting renderer and assets are registered globally.
+    app.add_plugins(GaussianSplattingPlugin);
+    // Our GPU mesh->gaussian conversion systems
+    app.add_plugins(gaussian::GpuMeshToGaussiansPlugin);
     }
 }
 
@@ -31,6 +36,7 @@ pub mod prelude {
         cpu_mesh_to_gaussians::*,
         cpu_transform::*,
         settings::*,
+        gpu_mesh_to_gaussians::*,
     };
     pub use bevy_gaussian_splatting::{
         Gaussian3d, 

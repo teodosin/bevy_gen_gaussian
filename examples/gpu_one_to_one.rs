@@ -1,0 +1,291 @@
+//! # Mesh to Gaussian Cloud Converter
+//!
+//! This example demonstrates converting a 3D mesh into Gaussian splats on the CPU,
+//! creating separate visualizations for vertices, edges, and faces.
+//!
+//! ## Features
+//!
+//! - **Vertex Splats**: Small isotropic splats at each mesh vertex
+//! - **Edge Splats**: Elongated splats along each unique geometric edge
+//! - **Face Splats**: Flat splats covering each triangle face
+//! - **Interactive Controls**: Toggle visibility of each splat type
+//! - **Geometric Deduplication**: Handles mesh seams and UV splits correctly
+//!
+//! ## Controls
+//!
+//! - `WASD`: Orbit camera around the model
+//! - `Q/E`: Zoom in/out
+//! - `1`: Toggle vertex splats
+//! - `2`: Toggle edge splats  
+//! - `3`: Toggle face splats
+//!
+//! ## Run Command
+//!
+//! ```bash
+//! cargo run --example mesh_to_cloud --features="viewer io_ply planar buffer_storage bevy/bevy_ui bevy/bevy_scene"
+//! ```
+//!
+//! Ensure `assets/scenes/monkey.glb` exists in the bevy_gaussian_splatting assets directory.
+
+use std::collections::HashSet;
+use bevy::prelude::*;
+use bevy::math::Mat3;
+use bevy::render::mesh::{
+    Indices,
+    PrimitiveTopology,
+    VertexAttributeValues,
+};
+
+use bevy_gaussian_splatting::{
+    CloudSettings,
+    Gaussian3d,
+    GaussianCamera,
+    PlanarGaussian3d,
+    PlanarGaussian3dHandle,
+};
+use bevy::ui::Val::Px;
+use bevy_gen_gaussian::{GenGaussianPlugin, MeshToGaussian, MeshToGaussianMode};
+
+/// Path to the mesh asset to convert
+const MESH_PATH: &str = "scenes/monkey.glb";
+
+
+
+
+
+
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_plugins(GenGaussianPlugin)
+
+        .init_resource::<CloudVisibility>()
+        .init_resource::<ConversionMetrics>()
+        .add_systems(Startup, (setup_scene, setup_ui, load_mesh))
+        .add_systems(Update, (
+            camera_controls,
+            update_info_text,
+        ))
+        .run();
+}
+
+
+
+
+
+// --- Resources ---
+
+/// Resource tracking which types of splats are currently visible
+#[derive(Resource)]
+struct CloudVisibility {
+    vertices: bool,
+    edges: bool,
+    faces: bool,
+}
+
+/// Resource tracking conversion performance metrics
+#[derive(Resource, Default)]
+struct ConversionMetrics {
+    conversion_time_ms: f32,
+    total_gaussians: usize,
+    vertex_count: usize,
+    edge_count: usize,
+    face_count: usize,
+}
+
+impl Default for CloudVisibility {
+    fn default() -> Self {
+        Self {
+            vertices: true,  // Start with vertices visible
+            edges: false,
+            faces: false,
+        }
+    }
+}
+
+/// Resource holding the scene handle while waiting for it to load
+#[derive(Resource, Default)]
+struct PendingMeshScene(Handle<Scene>);
+
+
+
+
+
+// --- Components ---
+
+/// Marker for the UI info text
+#[derive(Component)]
+struct InfoText;
+
+
+
+
+
+// --- Systems ---
+
+/// Set up the 3D scene with camera and lighting
+fn setup_scene(mut commands: Commands) {
+    // UI camera for the overlay text
+    commands.spawn(Camera2d);
+    
+    // 3D camera for Gaussian rendering - positioned to view the model
+    commands.spawn((
+        GaussianCamera {
+            warmup: true,
+        },
+        Camera3d::default(),
+        Transform::from_translation(Vec3::new(0.0, 1.0, 8.0))
+            .looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+
+    // Directional light to illuminate the scene
+    commands.spawn((
+        DirectionalLight::default(),
+        Transform::from_xyz(2.0, 4.0, 2.0)
+            .looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+}
+
+
+
+
+
+/// Set up the UI overlay showing controls and status
+fn setup_ui(mut commands: Commands) {
+    commands.spawn((
+        Text::new("Loading mesh..."),
+        TextFont {
+            font_size: 24.0,
+            ..default()
+        },
+        TextColor(Color::srgb(1.0, 1.0, 1.0)),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Px(10.0),
+            left: Px(10.0),
+            ..default()
+        },
+        InfoText,
+    ));
+}
+
+
+
+
+
+/// Load the mesh asset and prepare for conversion
+fn load_mesh(mut commands: Commands, assets: Res<AssetServer>) {
+
+    let scene: Handle<Scene> = assets.load(MESH_PATH.to_string() + "#Scene0");
+
+    commands.insert_resource(PendingMeshScene(scene.clone()));
+
+    commands.spawn((
+        SceneRoot(scene),
+        Transform::default(),
+        Visibility::Visible,
+        MeshToGaussian {
+            mode: MeshToGaussianMode::TrianglesOneToOne,
+            surfel_thickness: 0.01,
+            hide_source_mesh: true,
+            realtime: false,
+        },
+    ));
+}
+
+
+
+
+
+
+// === Interactive Controls ===
+
+/// Camera orbit controls using WASD keys and QE for zoom
+fn camera_controls(
+    mut camera_query: Query<&mut Transform, With<GaussianCamera>>,
+    input: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
+) {
+    let Ok(mut camera_transform) = camera_query.single_mut() else { return };
+    
+    const ROTATION_SPEED: f32 = 1.5; // radians per second
+    const ZOOM_SPEED: f32 = 5.0;     // units per second
+    
+    let mut distance = camera_transform.translation.length();
+    
+    // Convert current position to spherical coordinates
+    let current_pos = camera_transform.translation;
+    let mut azimuth = current_pos.z.atan2(current_pos.x);   // rotation around Y-axis
+    let mut elevation = (current_pos.y / distance).asin();  // angle from XZ-plane
+    
+    // Handle rotation input
+    if input.pressed(KeyCode::KeyD) {
+        azimuth += ROTATION_SPEED * time.delta_secs();
+    }
+    if input.pressed(KeyCode::KeyA) {
+        azimuth -= ROTATION_SPEED * time.delta_secs();
+    }
+    if input.pressed(KeyCode::KeyW) {
+        elevation += ROTATION_SPEED * time.delta_secs();
+    }
+    if input.pressed(KeyCode::KeyS) {
+        elevation -= ROTATION_SPEED * time.delta_secs();
+    }
+    
+    // Handle zoom input
+    if input.pressed(KeyCode::KeyE) || input.pressed(KeyCode::NumpadAdd) {
+        distance -= ZOOM_SPEED * time.delta_secs();
+    }
+    if input.pressed(KeyCode::KeyQ) || input.pressed(KeyCode::NumpadSubtract) {
+        distance += ZOOM_SPEED * time.delta_secs();
+    }
+    
+    // Clamp values to reasonable bounds
+    elevation = elevation.clamp(-std::f32::consts::FRAC_PI_2 + 0.1, std::f32::consts::FRAC_PI_2 - 0.1);
+    distance = distance.clamp(1.0, 50.0);
+    
+    // Convert back to Cartesian coordinates
+    let new_position = Vec3::new(
+        distance * elevation.cos() * azimuth.cos(),
+        distance * elevation.sin(),
+        distance * elevation.cos() * azimuth.sin(),
+    );
+    
+    // Update camera transform
+    camera_transform.translation = new_position;
+    camera_transform.look_at(Vec3::ZERO, Vec3::Y);
+}
+
+
+/// Update the UI text showing controls and current state
+fn update_info_text(
+    mut text_query: Query<&mut Text, With<InfoText>>,
+    metrics: Res<ConversionMetrics>,
+) {
+    let Ok(mut text) = text_query.single_mut() else { return };
+
+    
+    // Display conversion metrics if available
+    let metrics_text = if metrics.total_gaussians > 0 {
+        format!(
+            "\n\
+            Conversion Metrics:\n\
+            • Total Gaussians: {}\n\
+            • Conversion time: {:.1} ms",
+            metrics.total_gaussians,
+            metrics.conversion_time_ms
+        )
+    } else {
+        String::new()
+    };
+    
+    **text = format!(
+        "Mesh to Gaussian Splats Demo\n\
+        \n\
+        Camera Controls:\n\
+        • WASD: Orbit camera\n\
+        • Q/E: Zoom in/out\n\
+        ",
+
+    );
+}
