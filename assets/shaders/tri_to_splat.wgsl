@@ -4,8 +4,13 @@
 
 #define_import_path bevy_gen_gaussian::tri_to_splat
 
-// Import renderer bindings so we can bind the cloud as group(2)
-#import bevy_gaussian_splatting::bindings
+// Import renderer bindings explicitly so symbols are in scope as group(2)
+#import bevy_gaussian_splatting::bindings::{
+  position_visibility,
+  spherical_harmonics,
+  rotation,
+  scale_opacity,
+}
 struct Uniforms {
   world_from_mesh : mat4x4<f32>,
   thickness       : f32,   // normal-axis stddev (meters)

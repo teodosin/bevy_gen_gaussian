@@ -27,22 +27,10 @@
 //!
 //! Ensure `assets/scenes/monkey.glb` exists in the bevy_gaussian_splatting assets directory.
 
-use std::collections::HashSet;
 use bevy::prelude::*;
-use bevy::math::Mat3;
-use bevy::render::mesh::{
-    Indices,
-    PrimitiveTopology,
-    VertexAttributeValues,
-};
+use bevy::render::mesh::{};
 
-use bevy_gaussian_splatting::{
-    CloudSettings,
-    Gaussian3d,
-    GaussianCamera,
-    PlanarGaussian3d,
-    PlanarGaussian3dHandle,
-};
+use bevy_gaussian_splatting::{ GaussianCamera };
 use bevy::ui::Val::Px;
 use bevy_gen_gaussian::{GenGaussianPlugin, MeshToGaussian, MeshToGaussianMode};
 
@@ -125,15 +113,17 @@ struct InfoText;
 
 /// Set up the 3D scene with camera and lighting
 fn setup_scene(mut commands: Commands) {
-    // UI camera for the overlay text
-    commands.spawn(Camera2d);
+    // 2D UI camera for overlay text: give it a higher order to render after 3D
+    commands.spawn((
+        Camera2d,
+        Camera { order: 10, ..default() },
+    ));
     
     // 3D camera for Gaussian rendering - positioned to view the model
     commands.spawn((
-        GaussianCamera {
-            warmup: true,
-        },
+        GaussianCamera { warmup: true },
         Camera3d::default(),
+        Camera { order: 0, ..default() },
         Transform::from_translation(Vec3::new(0.0, 1.0, 8.0))
             .looking_at(Vec3::ZERO, Vec3::Y),
     ));
@@ -266,26 +256,13 @@ fn update_info_text(
 
     
     // Display conversion metrics if available
-    let metrics_text = if metrics.total_gaussians > 0 {
-        format!(
-            "\n\
-            Conversion Metrics:\n\
-            • Total Gaussians: {}\n\
-            • Conversion time: {:.1} ms",
-            metrics.total_gaussians,
-            metrics.conversion_time_ms
-        )
-    } else {
-        String::new()
-    };
-    
     **text = format!(
         "Mesh to Gaussian Splats Demo\n\
         \n\
         Camera Controls:\n\
         • WASD: Orbit camera\n\
         • Q/E: Zoom in/out\n\
-        ",
+    ",
 
     );
 }

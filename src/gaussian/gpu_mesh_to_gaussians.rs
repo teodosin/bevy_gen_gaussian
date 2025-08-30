@@ -1,21 +1,23 @@
 use bevy::{
     prelude::*,
-    render::{
+        render::{
         extract_component::{ExtractComponent, ExtractComponentPlugin},
         render_graph::{Node, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel},
         render_resource::{
             BindGroup, BindGroupEntry, BindGroupLayout, BindGroupLayoutEntry, BindingType,
             Buffer, BufferBindingType, BufferInitDescriptor, BufferSize, BufferUsages,
             CachedComputePipelineId, CachedPipelineState, ComputePassDescriptor, ComputePipelineDescriptor,
-            PipelineCache, ShaderStages,
+            PipelineCache, ShaderDefVal, ShaderStages,
         },
         renderer::{RenderContext, RenderDevice},
         Render, RenderApp, RenderSet,
     },
 };
-use bevy_gaussian_splatting::{CloudSettings, Gaussian3d, PlanarGaussian3d, PlanarGaussian3dHandle};
+use bevy_gaussian_splatting::{CloudSettings, Gaussian3d, PlanarGaussian3d, PlanarGaussian3dHandle, RasterizeMode};
 use bevy_gaussian_splatting::render::{CloudPipeline, GaussianUniformBindGroups};
 use bevy_gaussian_splatting::PlanarStorageBindGroup;
+use bevy::render::extract_component::DynamicUniformIndex;
+use bevy_gaussian_splatting::render::CloudUniform;
 
 // Reuse canonical component/type from gaussian::mod.rs (avoid duplicate defs)
 use super::{MeshToGaussian, MeshToGaussianMode};
@@ -66,6 +68,7 @@ struct MeshCpuBuffers {
     positions: Vec<[f32; 3]>,
     indices: Vec<u32>,
     thickness: f32,
+    world_from_mesh: [[f32; 4]; 4],
 }
 
 impl ExtractComponent for MeshCpuBuffers {
@@ -83,10 +86,11 @@ fn setup_mesh_to_gaussian_conversion(
     mut planar_gaussians: ResMut<Assets<PlanarGaussian3d>>,
     children: Query<&Children>,
     mesh_on_entity: Query<&Mesh3d>,
-    // transforms: Query<&GlobalTransform>,
-    added: Query<(Entity, &MeshToGaussian), Added<MeshToGaussian>>,
+    transforms: Query<&GlobalTransform>,
+    query: Query<(Entity, &MeshToGaussian), (With<MeshToGaussian>, Without<PlanarGaussian3dHandle>)>,
 ) {
-    for (root, config) in &added {
+    // Iterate entities that want conversion but don't yet have a cloud
+    for (root, config) in &query {
         if config.mode != MeshToGaussianMode::TrianglesOneToOne {
             continue;
         }
@@ -104,20 +108,28 @@ fn setup_mesh_to_gaussian_conversion(
             }
         }
         let Some((mesh_entity, mesh_handle)) = found else {
-            warn!("MeshToGaussian set on {:?} but no Mesh3d found in descendants", root);
+            // Scene not instantiated yet; try again next frame
             continue;
         };
 
-        // Count triangles and create a cloud of that capacity
-    let Some(mesh) = meshes.get(&mesh_handle) else { continue }; // asset not yet loaded
-    let tri_count = match mesh.indices() { Some(ix) => ix.len() / 3, None => mesh.count_vertices() / 3 };
+        // Count triangles and create a cloud of that capacity if mesh asset is loaded
+        let Some(mesh) = meshes.get(&mesh_handle) else {
+            // Hide the source mesh early if requested, then wait for asset
+            if config.hide_source_mesh {
+                commands.entity(mesh_entity).insert(Visibility::Hidden);
+            }
+            // Track the source handle so we can complete setup later
+            commands.entity(root).insert(MeshConversionSource { _mesh_entity: mesh_entity, mesh_handle: mesh_handle.clone() });
+            continue;
+        };
+        let tri_count = match mesh.indices() { Some(ix) => ix.len() / 3, None => mesh.count_vertices() / 3 };
         let cloud = PlanarGaussian3d::from(vec![Gaussian3d::default(); tri_count]);
         let cloud_handle = planar_gaussians.add(cloud);
 
         // Attach cloud and settings on the root entity so renderer sees it; keep track of source mesh
         commands.entity(root).insert((
             PlanarGaussian3dHandle(cloud_handle.clone()),
-            CloudSettings::default(),
+            CloudSettings { aabb: true, rasterize_mode: RasterizeMode::Normal, ..default() },
             MeshConversionSource { _mesh_entity: mesh_entity, mesh_handle: mesh_handle.clone() },
         ));
 
@@ -125,8 +137,8 @@ fn setup_mesh_to_gaussian_conversion(
             commands.entity(mesh_entity).insert(Visibility::Hidden);
         }
 
-        // Prepare CPU compact buffers for upload once
-        let positions: Vec<[f32; 3]> = match mesh.attribute(Mesh::ATTRIBUTE_POSITION) {
+    // Prepare CPU compact buffers for upload once
+    let positions: Vec<[f32; 3]> = match mesh.attribute(Mesh::ATTRIBUTE_POSITION) {
             Some(bevy::render::mesh::VertexAttributeValues::Float32x3(v)) => v.clone(),
             Some(bevy::render::mesh::VertexAttributeValues::Float32x4(v)) => v.iter().map(|p| [p[0], p[1], p[2]]).collect(),
             _ => Vec::new(),
@@ -137,7 +149,11 @@ fn setup_mesh_to_gaussian_conversion(
             None => (0..positions.len() as u32).collect(),
         };
         if !positions.is_empty() && !indices.is_empty() {
-            commands.entity(root).insert(MeshCpuBuffers { positions, indices, thickness: config.surfel_thickness });
+            let world_from_mesh = transforms
+                .get(mesh_entity)
+                .map(|t| t.compute_matrix().to_cols_array_2d())
+                .unwrap_or(Mat4::IDENTITY.to_cols_array_2d());
+            commands.entity(root).insert(MeshCpuBuffers { positions, indices, thickness: config.surfel_thickness, world_from_mesh });
         }
     }
 }
@@ -146,9 +162,11 @@ fn setup_mesh_to_gaussian_conversion(
 fn attach_cpu_buffers_when_ready(
     mut commands: Commands,
     meshes: Res<Assets<Mesh>>,
-    pending: Query<(Entity, &MeshConversionSource), (With<PlanarGaussian3dHandle>, Without<MeshCpuBuffers>)>,
+    mut planar_gaussians: ResMut<Assets<PlanarGaussian3d>>,
+    transforms: Query<&GlobalTransform>,
+    pending: Query<(Entity, &MeshConversionSource, Option<&PlanarGaussian3dHandle>, Option<&MeshToGaussian>), Without<MeshCpuBuffers>>,
 ) {
-    for (entity, src) in &pending {
+    for (entity, src, maybe_cloud, maybe_cfg) in &pending {
         if let Some(mesh) = meshes.get(&src.mesh_handle) {
             let positions: Vec<[f32; 3]> = match mesh.attribute(Mesh::ATTRIBUTE_POSITION) {
                 Some(bevy::render::mesh::VertexAttributeValues::Float32x3(v)) => v.clone(),
@@ -161,7 +179,24 @@ fn attach_cpu_buffers_when_ready(
                 None => (0..positions.len() as u32).collect(),
             };
             if !positions.is_empty() && !indices.is_empty() {
-                commands.entity(entity).insert(MeshCpuBuffers { positions, indices, thickness: 0.01 });
+                // Ensure a cloud exists; if not, create one sized to triangles
+                if maybe_cloud.is_none() {
+                    let tri_count = match mesh.indices() { Some(ix) => ix.len() / 3, None => mesh.count_vertices() / 3 };
+                    let cloud = PlanarGaussian3d::from(vec![Gaussian3d::default(); tri_count]);
+                    let handle = planar_gaussians.add(cloud);
+                    commands.entity(entity).insert((
+                        PlanarGaussian3dHandle(handle),
+                        CloudSettings { aabb: true, rasterize_mode: RasterizeMode::Normal, ..default() },
+                    ));
+                }
+
+                // Use the mesh entity's transform
+                let world_from_mesh = transforms
+                    .get(src._mesh_entity)
+                    .map(|t| t.compute_matrix().to_cols_array_2d())
+                    .unwrap_or(Mat4::IDENTITY.to_cols_array_2d());
+                let thickness = maybe_cfg.map(|c| c.surfel_thickness).unwrap_or(0.01);
+                commands.entity(entity).insert(MeshCpuBuffers { positions, indices, thickness, world_from_mesh });
             }
         }
     }
@@ -198,7 +233,7 @@ struct Uniforms {
 
 impl FromWorld for TriToSplatPipeline {
     fn from_world(world: &mut World) -> Self {
-        let Some(render_device) = world.get_resource::<RenderDevice>() else { return Self { inputs_layout: None, pipeline: CachedComputePipelineId::INVALID }; };
+    let Some(render_device) = world.get_resource::<RenderDevice>() else { return Self { inputs_layout: None, pipeline: CachedComputePipelineId::INVALID }; };
         let Some(pipeline_cache) = world.get_resource::<PipelineCache>() else { return Self { inputs_layout: None, pipeline: CachedComputePipelineId::INVALID }; };
         let Some(asset_server) = world.get_resource::<AssetServer>() else { return Self { inputs_layout: None, pipeline: CachedComputePipelineId::INVALID }; };
         let Some(cloud_pipeline) = world.get_resource::<CloudPipeline<Gaussian3d>>() else { return Self { inputs_layout: None, pipeline: CachedComputePipelineId::INVALID }; };
@@ -228,9 +263,25 @@ impl FromWorld for TriToSplatPipeline {
             ],
         );
 
-    let shader = asset_server.load("shaders/tri_to_splat.wgsl");
+        let shader = asset_server.load("shaders/tri_to_splat.wgsl");
+        let shader_defs = vec![
+            // enable compute writes to cloud buffers
+            ShaderDefVal::from("READ_WRITE_POINTS"),
+            // match renderer storage flavor
+            ShaderDefVal::from("BUFFER_STORAGE"),
+            ShaderDefVal::from("PLANAR_F32"),
+            ShaderDefVal::from("GAUSSIAN_3D_STRUCTURE"),
+            ShaderDefVal::from("F32"),
+            // SH metadata used by imported bindings and helpers
+            ShaderDefVal::UInt("SH_COEFF_COUNT".into(), bevy_gaussian_splatting::material::spherical_harmonics::SH_COEFF_COUNT as u32),
+            ShaderDefVal::UInt("HALF_SH_COEFF_COUNT".into(), bevy_gaussian_splatting::material::spherical_harmonics::HALF_SH_COEFF_COUNT as u32),
+            ShaderDefVal::UInt("SH_VEC4_PLANES".into(), bevy_gaussian_splatting::material::spherical_harmonics::SH_VEC4_PLANES as u32),
+            ShaderDefVal::UInt("SH_DEGREE".into(), bevy_gaussian_splatting::material::spherical_harmonics::SH_DEGREE as u32),
+            ShaderDefVal::UInt("SH_4D_COEFF_COUNT".into(), bevy_gaussian_splatting::material::spherindrical_harmonics::SH_4D_COEFF_COUNT as u32),
+            ShaderDefVal::UInt("SH_DEGREE_TIME".into(), bevy_gaussian_splatting::material::spherindrical_harmonics::SH_4D_DEGREE_TIME as u32),
+        ];
         // Include group(1) gaussian uniforms and group(2) cloud storage to satisfy pipeline layout indices 1 and 2.
-    let pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
+        let pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
             label: Some("tri_to_splat_pipeline".into()),
             layout: vec![
                 inputs_layout.clone(),
@@ -238,13 +289,13 @@ impl FromWorld for TriToSplatPipeline {
                 cloud_pipeline.gaussian_cloud_layout.clone(),
             ],
             shader,
-            shader_defs: vec![],
+            shader_defs,
             entry_point: "main".into(),
             push_constant_ranges: vec![],
             zero_initialize_workgroup_memory: true,
         });
 
-    Self { inputs_layout: Some(inputs_layout), pipeline }
+        Self { inputs_layout: Some(inputs_layout), pipeline }
     }
 }
 
@@ -252,10 +303,10 @@ fn queue_tri_to_splat_bind_groups(
     mut commands: Commands,
     render_device: Res<RenderDevice>,
     pipeline: Option<Res<TriToSplatPipeline>>,
-    query: Query<(Entity, &MeshCpuBuffers, &PlanarGaussian3dHandle, &GlobalTransform), Without<TriToSplatGpu>>,
+    query: Query<(Entity, &MeshCpuBuffers, &PlanarGaussian3dHandle), Without<TriToSplatGpu>>,
 ) {
     let Some(pipeline) = pipeline else { return; };
-    for (entity, cpu, _cloud_handle, transform) in &query {
+    for (entity, cpu, _cloud_handle) in &query {
         let tri_count = (cpu.indices.len() / 3) as u32;
 
         let positions_ssbo = render_device.create_buffer_with_data(&BufferInitDescriptor {
@@ -269,7 +320,7 @@ fn queue_tri_to_splat_bind_groups(
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
         });
         let uniforms = Uniforms {
-            world_from_mesh: transform.compute_matrix().to_cols_array_2d(),
+            world_from_mesh: cpu.world_from_mesh,
             thickness: cpu.thickness,
             visibility: 1.0,
             opacity: 1.0,
@@ -309,6 +360,7 @@ fn queue_tri_to_splat_bind_groups(
 struct TriToSplatNode {
     conv_q: bevy::ecs::query::QueryState<(Entity, &'static TriToSplatGpu)>,
     cloud_q: bevy::ecs::query::QueryState<&'static PlanarStorageBindGroup<Gaussian3d>>,
+    uniform_q: bevy::ecs::query::QueryState<&'static DynamicUniformIndex<CloudUniform>>,
     initialized: bool,
 }
 
@@ -317,6 +369,7 @@ impl FromWorld for TriToSplatNode {
         Self {
             conv_q: world.query(),
             cloud_q: world.query(),
+            uniform_q: world.query(),
             initialized: false,
         }
     }
@@ -331,6 +384,7 @@ impl Node for TriToSplatNode {
             self.initialized = true;
             self.conv_q.update_archetypes(world);
             self.cloud_q.update_archetypes(world);
+            self.uniform_q.update_archetypes(world);
         }
     }
 
@@ -342,12 +396,22 @@ impl Node for TriToSplatNode {
     let Some(pso) = cache.get_compute_pipeline(pipeline.pipeline) else { return Ok(()); };
         let uniforms = world.resource::<GaussianUniformBindGroups>();
         let gaussian_bg = uniforms.base_bind_group.as_ref();
+        if gaussian_bg.is_none() {
+            // required group(1) not ready yet
+            return Ok(());
+        }
 
         let mut pass = render_context.command_encoder().begin_compute_pass(&ComputePassDescriptor { label: Some("tri_to_splat_compute"), timestamp_writes: None });
         pass.set_pipeline(pso);
         for (entity, conv) in self.conv_q.iter_manual(world) {
             pass.set_bind_group(0, &conv.bind_group_inputs, &[]);
-            if let Some(bg) = gaussian_bg { pass.set_bind_group(1, bg, &[]); }
+            // safe to unwrap due to early return above
+            if let Ok(uni_ix) = self.uniform_q.get_manual(world, entity) {
+                pass.set_bind_group(1, gaussian_bg.unwrap(), &[uni_ix.index()]);
+            } else {
+                // dynamic uniform not ready for this entity yet
+                continue;
+            }
             if let Ok(cloud_bg) = self.cloud_q.get_manual(world, entity) {
                 pass.set_bind_group(2, &cloud_bg.bind_group, &[]);
                 pass.dispatch_workgroups(conv.workgroups, 1, 1);
