@@ -85,7 +85,7 @@ pub fn queue_compatible_rw_bind_groups(
         // Use the same layout as the render pipeline
         let bg = rd.create_bind_group(
             "compatible_storage_gaussian_3d_bind_group_rw",
-            &pipeline.gaussian_cloud_layout_rw,
+            &pipeline.gaussian_cloud_layout,
             &[
                 BindGroupEntry { binding: 0, resource: storage.position_visibility.as_entire_binding() },
                 BindGroupEntry { binding: 1, resource: storage.spherical_harmonic.as_entire_binding() },
