@@ -1,4 +1,3 @@
-pub mod voxel;
 pub mod gaussian;
 pub mod sdf_module;
 pub mod debug;
@@ -8,23 +7,24 @@ use bevy_gaussian_splatting::GaussianSplattingPlugin;
 
 pub struct GenGaussianPlugin;
 
+fn log_gen_gaussian_startup() {
+    info!(
+        "GenGaussianPlugin Startup: adding GaussianSplattingPlugin + GenGaussianGpuPlugin"
+    );
+}
+
 impl Plugin for GenGaussianPlugin {
     fn build(&self, app: &mut App) {
-    // Do not add voxel plugin by default; it's orthogonal and can panic if not configured.
-    // Ensure the gaussian splatting renderer and assets are registered globally.
-    app.add_plugins(GaussianSplattingPlugin);
-    // Our GPU mesh->gaussian conversion systems
-    app.add_plugins(gaussian::GpuMeshToGaussiansPlugin);
+        // Do not add voxel plugin by default; it's orthogonal and can panic if not configured.
+        // Ensure the gaussian splatting renderer and assets are registered globally.
+        app.add_systems(Startup, log_gen_gaussian_startup);
+        app.add_plugins(GaussianSplattingPlugin);
+        // Our GPU mesh->gaussian conversion systems
+        app.add_plugins(gaussian::GenGaussianGpuPlugin);
     }
 }
 
-// Public API exports - re-export from voxel module
-pub use voxel::{
-    Voxel, VoxelChunkSimple, VoxelData, MaterialId,
-    EditOp, EditBatch, VoxelWorld, queue_set,
-    BrushSettings, BrushMode, apply_sphere_brush, apply_box_brush, cast_editing_ray, RaycastMode, generate_terrain,
-    LastInstanceCount, BillboardTag, VoxelBillboard, Metrics, DebugOverlayPlugin
-};
+
 pub use bevy_panorbit_camera::PanOrbitCamera;
 
 // Re-export the main Gaussian APIs for convenience

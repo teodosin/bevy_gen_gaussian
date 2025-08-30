@@ -42,7 +42,6 @@ bevy_gaussian_splatting = { path = "../bevy_gaussian_splatting", features = [
   "io_ply",
   "planar",
   "buffer_storage",
-  "read_write_points",
 ]}
 bytemuck = { version = "1.15", features = ["derive"] }
 # (removed direct wgpu dependency; use Bevy re-export)

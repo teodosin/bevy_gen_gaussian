@@ -32,7 +32,7 @@ use bevy::render::mesh::{};
 
 use bevy_gaussian_splatting::{ GaussianCamera };
 use bevy::ui::Val::Px;
-use bevy_gen_gaussian::{GenGaussianPlugin, MeshToGaussian, MeshToGaussianMode};
+use bevy_gen_gaussian::{GenGaussianPlugin, MeshToGaussian, MeshToGaussianMode, TriToSplatParams};
 
 /// Path to the mesh asset to convert
 const MESH_PATH: &str = "scenes/monkey.glb";
@@ -126,6 +126,7 @@ fn setup_scene(mut commands: Commands) {
         Camera { order: 0, ..default() },
         Transform::from_translation(Vec3::new(0.0, 1.0, 8.0))
             .looking_at(Vec3::ZERO, Vec3::Y),
+        TriToSplatParams { gaussian_count: 1_000, ..default() }
     ));
 
     // Directional light to illuminate the scene
