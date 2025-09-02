@@ -68,14 +68,14 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let rotation = quat_from_unit_vectors(vec3<f32>(0.0, 0.0, 1.0), normal);
 
     // Simple scale based on triangle edge lengths
-    let scale_x = length(v0) / 2.0;
-    let scale_y = length(v1) / 2.0;
+    let scale_x = length(v0) / 5.0;
+    let scale_y = length(v1) / 5.0;
     let scale_z = 0.01; // Surfel thickness
     let opacity = 1.0;
 
     // --- Write to Output Buffers ---
     out_position_visibility[tri_idx] = vec4<f32>(center, 1.0);
-    out_rotation[tri_idx] = rotation;
+    out_rotation[tri_idx] = vec4<f32>(rotation.w, rotation.x, rotation.y, rotation.z);
     out_scale_opacity[tri_idx] = vec4<f32>(scale_x, scale_y, scale_z, opacity);
 
     // --- Set Spherical Harmonics ---
