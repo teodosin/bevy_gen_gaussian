@@ -1,7 +1,8 @@
-// A struct to represent the 192-byte spherical harmonics data for a single Gaussian.
-// It's an array of 12 vec4<f32>s, which equals 12 * 16 = 192 bytes.
+// Spherical harmonics data for a single Gaussian.
+// This must match the layout expected by bevy_gaussian_splatting: array<f32, 48>
+// where 48 = SH_COEFF_COUNT (16 coefficients per channel * 3 channels)
 struct SphericalHarmonic {
-    data: array<vec4<f32>, 12>,
+    coefficients: array<f32, 48>,
 }
 
 // Input buffers (read-only)
@@ -83,14 +84,17 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // C0 = 0.28209479177387814
     let C0 = 0.28209479;
     var sh: SphericalHarmonic;
-    sh.data[0] = vec4<f32>(C0, 0.0, 0.0, 0.0); // Red DC term
-    sh.data[1] = vec4<f32>(C0, 0.0, 0.0, 0.0); // Green DC term
-    sh.data[2] = vec4<f32>(C0, 0.0, 0.0, 0.0); // Blue DC term
     
-    // Zero out the rest of the SH data
-    for (var i = 3; i < 12; i = i + 1) {
-        sh.data[i] = vec4<f32>(0.0);
+    // Initialize all coefficients to zero
+    for (var i = 0; i < 48; i = i + 1) {
+        sh.coefficients[i] = 0.0;
     }
+    
+    // Set the DC terms for RGB channels (coefficients 0, 16, 32)
+    // These are the first coefficient of each of the 3 color channels
+    sh.coefficients[0] = C0;   // Red DC term
+    sh.coefficients[16] = C0;  // Green DC term  
+    sh.coefficients[32] = C0;  // Blue DC term
     
     out_spherical_harmonics[tri_idx] = sh;
 }

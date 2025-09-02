@@ -8,8 +8,6 @@
 //!
 //! Make sure you load the shader as "tri_to_splat.wgsl" in your assets.
 
-use crate::MeshToGaussian;
-
 use bevy::{
     core_pipeline::core_3d::graph::{Core3d, Node3d},
     ecs::query::QueryItem,
@@ -72,6 +70,31 @@ pub struct PlanarStorageBindGroupRw {
     pub bind_group: BindGroup,
 }
 
+// ---------------- Job Queue (prepared -> consumed) -----------------
+
+#[derive(Clone)]
+struct TriToSplatJob {
+    inputs_bg: BindGroup,
+    planar_rw_bg: BindGroup,
+    workgroups: UVec3,
+}
+
+#[derive(Resource, Default)]
+struct TriToSplatJobQueue {
+    jobs: Vec<TriToSplatJob>,
+}
+
+/// Clear queued compute jobs at the start of the Render frame so we only dispatch once per frame
+fn clear_tri_to_splat_jobs(mut job_queue: ResMut<TriToSplatJobQueue>) {
+    if !job_queue.jobs.is_empty() {
+        bevy::log::info!(
+            "clear_tri_to_splat_jobs: clearing {} queued job(s)",
+            job_queue.jobs.len()
+        );
+        job_queue.jobs.clear();
+    }
+}
+
 
 // THIS FUNCTION IS THE CORRECTED ONE - it creates a layout with read_only=false
 pub fn queue_planar_cloud_rw_bind_group(
@@ -79,7 +102,7 @@ pub fn queue_planar_cloud_rw_bind_group(
     rd: Res<RenderDevice>,
     gpu_clouds: Res<RenderAssets<PlanarStorageGaussian3d>>,
     pipeline: Res<TriToSplatPipeline>, // Use our compute pipeline's layout
-    q: Query<(Entity, &PlanarGaussian3dHandle), Without<PlanarStorageBindGroupRw>>,
+    q: Query<(Entity, &PlanarGaussian3dHandle)>,
 ) {
     bevy::log::info!("queue_planar_cloud_rw_bind_group: begin");
     let mut created = 0usize;
@@ -114,6 +137,7 @@ pub fn queue_planar_cloud_rw_bind_group(
         commands
             .entity(entity)
             .insert(PlanarStorageBindGroupRw { bind_group: bg });
+        bevy::log::info!("queue_planar_cloud_rw_bind_group: added PlanarStorageBindGroupRw to entity {entity:?}");
         created += 1;
     }
 
@@ -132,11 +156,19 @@ pub fn queue_tri_to_splat_inputs(
     mut commands: Commands,
     rd: Res<RenderDevice>,
     pipe: Res<TriToSplatPipeline>,
-    q: Query<(Entity, &PlanarStorageBindGroupRw, &TriToSplatCpuInput), Without<TriToSplatGpu>>,
+    mut job_queue: ResMut<TriToSplatJobQueue>,
+    q: Query<(Entity, &PlanarStorageBindGroupRw, &TriToSplatCpuInput)>,
+    existing_gpu: Query<(), With<TriToSplatGpu>>,
 ) {
     bevy::log::info!("queue_tri_to_splat_inputs: candidates={}", q.iter().len());
     let mut created = 0usize;
-    for (entity, _rw, cpu) in &q {
+    for (entity, planar_rw, cpu) in &q {
+        // Skip entities that already have TriToSplatGpu
+        if existing_gpu.get(entity).is_ok() {
+            bevy::log::info!("queue_tri_to_splat_inputs: skipping entity {entity:?} - already has TriToSplatGpu");
+            continue;
+        }
+        bevy::log::info!("queue_tri_to_splat_inputs: processing entity {entity:?}");
         // Upload CPU arrays to GPU buffers
         let ro_flags = BufferUsages::STORAGE | BufferUsages::COPY_DST;
         let u_flags = BufferUsages::UNIFORM | BufferUsages::COPY_DST;
@@ -206,10 +238,19 @@ pub fn queue_tri_to_splat_inputs(
             cpu.tri_count,
             x.max(1)
         );
-        commands.entity(entity).insert(TriToSplatGpu {
-            bind_group_inputs,
-            workgroups: UVec3::new(x.max(1), 1, 1),
+        let workgroups = UVec3::new(x.max(1), 1, 1);
+        // Enqueue a job for the compute node
+        job_queue.jobs.push(TriToSplatJob {
+            inputs_bg: bind_group_inputs.clone(),
+            planar_rw_bg: planar_rw.bind_group.clone(),
+            workgroups,
         });
+        // Mark entity so we don't enqueue again
+        commands.entity(entity).insert(TriToSplatGpu {
+            bind_group_inputs: bind_group_inputs,
+            workgroups,
+        });
+        bevy::log::info!("queue_tri_to_splat_inputs: added TriToSplatGpu to entity {entity:?}");
         created += 1;
     }
     if created > 0 {
@@ -381,16 +422,12 @@ impl FromWorld for TriToSplatPipeline {
 
 // ---------------------------------- Node -------------------------------------
 
-/// The compute node; uses a `QueryState` so it can iterate with only `&World`.
-pub struct TriToSplatNode {
-    conv_q: QueryState<(&'static TriToSplatGpu, &'static PlanarStorageBindGroupRw)>,
-}
+/// The compute node; consumes jobs queued during PrepareBindGroups (like the Game of Life example).
+pub struct TriToSplatNode;
 
 impl FromWorld for TriToSplatNode {
-    fn from_world(world: &mut World) -> Self {
-        Self {
-            conv_q: QueryState::new(world),
-        }
+    fn from_world(_world: &mut World) -> Self {
+        Self
     }
 }
 
@@ -405,18 +442,23 @@ impl ViewNode for TriToSplatNode {
         (_params, params_ix): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
+        bevy::log::info!("TriToSplatNode: run() called");
+        
         let cache = world.resource::<PipelineCache>();
         let pipe = world.resource::<TriToSplatPipeline>();
         let Some(compute) = cache.get_compute_pipeline(pipe.pipeline) else {
             bevy::log::warn!("TriToSplatNode: compute pipeline not ready yet");
             return Ok(());
         };
+        bevy::log::info!("TriToSplatNode: compute pipeline is ready");
 
         let params_uniforms = world.resource::<ComponentUniforms<TriToSplatParams>>();
         let Some(params_binding) = params_uniforms.uniforms().binding() else {
             bevy::log::warn!("TriToSplatNode: TriToSplatParams uniform buffer not initialized yet");
             return Ok(());
         };
+        bevy::log::info!("TriToSplatNode: params uniform buffer is ready");
+        
         let params_bg = rcx.render_device().create_bind_group(
             "tri_to_splat.params_bg",
             &pipe.params_layout,
@@ -435,20 +477,29 @@ impl ViewNode for TriToSplatNode {
             });
         pass.set_pipeline(compute);
         pass.set_bind_group(1, &params_bg, &[params_ix.index()]);
+        bevy::log::info!("TriToSplatNode: bound params with index {}", params_ix.index());
 
-        // Iterate conversion jobs with a query directly on world.
+        // Dispatch queued jobs
         let mut job_count = 0usize;
-        for (conv, planar_rw) in self.conv_q.iter_manual(world) {
-            pass.set_bind_group(0, &conv.bind_group_inputs, &[]);
-            pass.set_bind_group(2, &planar_rw.bind_group, &[]);
-            pass.dispatch_workgroups(conv.workgroups.x, conv.workgroups.y, conv.workgroups.z);
-            job_count += 1;
+        if let Some(queue) = world.get_resource::<TriToSplatJobQueue>() {
+            for job in &queue.jobs {
+                bevy::log::info!(
+                    "TriToSplatNode: dispatching workgroups({}, {}, {})",
+                    job.workgroups.x, job.workgroups.y, job.workgroups.z
+                );
+                pass.set_bind_group(0, &job.inputs_bg, &[]);
+                pass.set_bind_group(2, &job.planar_rw_bg, &[]);
+                pass.dispatch_workgroups(job.workgroups.x, job.workgroups.y, job.workgroups.z);
+                job_count += 1;
+            }
+        } else {
+            bevy::log::warn!("TriToSplatNode: TriToSplatJobQueue resource missing");
         }
 
         if job_count == 0 {
-            bevy::log::trace!("TriToSplatNode: no jobs to dispatch this frame");
+            bevy::log::warn!("TriToSplatNode: no jobs to dispatch this frame - no entities found");
         } else {
-            bevy::log::info!("TriToSplatNode: dispatched {} job(s)", job_count);
+            bevy::log::info!("TriToSplatNode: successfully dispatched {} job(s)", job_count);
         }
 
         Ok(())
@@ -475,6 +526,13 @@ impl Plugin for TriToSplatPlugin {
         };
         bevy::log::info!("TriToSplatPlugin.build: configuring render systems and graph node");
         render_app
+            .init_resource::<TriToSplatJobQueue>()
+            .add_systems(
+                Render,
+                clear_tri_to_splat_jobs
+                    .in_set(RenderSet::PrepareBindGroups)
+                    .before(queue_planar_cloud_rw_bind_group),
+            )
             .add_systems(
                 Render,
                 queue_planar_cloud_rw_bind_group.in_set(RenderSet::PrepareBindGroups),
@@ -489,9 +547,9 @@ impl Plugin for TriToSplatPlugin {
             .add_render_graph_edges(
                 Core3d,
                 (
-                    Node3d::LatePrepass,
-                    TriToSplatNodeLabel,
                     Node3d::StartMainPass,
+                    TriToSplatNodeLabel,
+                    Node3d::EndMainPass,
                 ),
             );
     }

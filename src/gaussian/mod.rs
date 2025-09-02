@@ -58,6 +58,7 @@ impl Plugin for GenGaussianGpuPlugin {
             (
                 process_new_meshes_for_gpu_conversion,
                 update_tri_to_splat_params,
+                debug_entities,
             ),
         );
         app.add_plugins(TriToSplatPlugin);
@@ -192,15 +193,45 @@ fn update_tri_to_splat_params(
     q_cloud_inputs: Query<&gpu_mesh_to_gaussians::TriToSplatCpuInput>,
     q_cameras: Query<Entity, With<Camera3d>>,
 ) {
+    let input_count = q_cloud_inputs.iter().count();
+    bevy::log::info!("update_tri_to_splat_params: found {} cloud inputs", input_count);
+    
     let mut max_gauss = 0u32;
     for input in &q_cloud_inputs {
         max_gauss = max_gauss.max(input.tri_count);
     }
-    if max_gauss == 0 { return; }
+    if max_gauss == 0 { 
+        bevy::log::info!("update_tri_to_splat_params: no gaussians to process");
+        return; 
+    }
+
+    let camera_count = q_cameras.iter().count();
+    bevy::log::info!("update_tri_to_splat_params: updating {} cameras with max_gauss={}", camera_count, max_gauss);
 
     for cam in &q_cameras {
         commands.entity(cam).insert(gpu_mesh_to_gaussians::TriToSplatParams {
             gaussian_count: max_gauss,
         });
+    }
+}
+
+/// Debug system to track what entities exist and their components
+fn debug_entities(
+    q_clouds: Query<Entity, With<bevy_gaussian_splatting::PlanarGaussian3dHandle>>,
+    q_inputs: Query<Entity, With<gpu_mesh_to_gaussians::TriToSplatCpuInput>>,
+    q_mesh_to_gauss: Query<Entity, With<MeshToGaussian>>,
+) {
+    let cloud_count = q_clouds.iter().count();
+    let input_count = q_inputs.iter().count(); 
+    let mesh_to_gauss_count = q_mesh_to_gauss.iter().count();
+    
+    // Only log periodically to avoid spam
+    static mut FRAME_COUNT: u32 = 0;
+    unsafe {
+        FRAME_COUNT += 1;
+        if FRAME_COUNT % 60 == 0 {
+            bevy::log::info!("DEBUG: clouds={}, inputs={}, mesh_to_gauss={}", 
+                cloud_count, input_count, mesh_to_gauss_count);
+        }
     }
 }

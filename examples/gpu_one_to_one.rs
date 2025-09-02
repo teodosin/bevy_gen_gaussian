@@ -1,31 +1,16 @@
 //! # Mesh to Gaussian Cloud Converter
 //!
-//! This example demonstrates converting a 3D mesh into Gaussian splats on the CPU,
-//! creating separate visualizations for vertices, edges, and faces.
+//! This example covers the simplest case of converting a mesh to a Gaussian splat cloud,
+//! generating one splat per triangle in the mesh. It uses the GPU-accelerated conversion
+//! pipeline provided by the `bevy_gen_gaussian` crate.
 //!
-//! ## Features
+//! For an end user, the conversion is as simple as adding a `MeshToGaussian` component
+//! to an entity with a mesh. The `GenGaussianPlugin` sets up the necessary systems
+//! to process these entities and generate the Gaussian clouds.
 //!
-//! - **Vertex Splats**: Small isotropic splats at each mesh vertex
-//! - **Edge Splats**: Elongated splats along each unique geometric edge
-//! - **Face Splats**: Flat splats covering each triangle face
-//! - **Interactive Controls**: Toggle visibility of each splat type
-//! - **Geometric Deduplication**: Handles mesh seams and UV splits correctly
-//!
-//! ## Controls
-//!
-//! - `WASD`: Orbit camera around the model
-//! - `Q/E`: Zoom in/out
-//! - `1`: Toggle vertex splats
-//! - `2`: Toggle edge splats  
-//! - `3`: Toggle face splats
-//!
-//! ## Run Command
-//!
-//! ```bash
-//! cargo run --example mesh_to_cloud --features="viewer io_ply planar buffer_storage bevy/bevy_ui bevy/bevy_scene"
-//! ```
-//!
-//! Ensure `assets/scenes/monkey.glb` exists in the bevy_gaussian_splatting assets directory.
+//! Controls:
+//! - WASD: Orbit camera around the model
+//! - Q/E: Zoom in and out
 
 use bevy::prelude::*;
 use bevy::render::mesh::{};
