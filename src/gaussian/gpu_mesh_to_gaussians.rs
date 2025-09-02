@@ -229,9 +229,8 @@ pub fn queue_tri_to_splat_inputs(
             ],
         );
 
-        // Workgroup sizing: 256 threads per group for tris
-
-        let x = (cpu.tri_count + 255) / 256;
+    // Workgroup sizing: match WGSL @workgroup_size(64, 1, 1)
+    let x = (cpu.tri_count + 63) / 64;
         bevy::log::info!(
             "queue_tri_to_splat_inputs: uploading {} verts / {} tris; dispatch x={}",
             cpu.positions.len(),
