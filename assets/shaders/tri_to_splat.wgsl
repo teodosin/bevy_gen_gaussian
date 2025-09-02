@@ -78,11 +78,15 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     out_rotation[tri_idx] = vec4<f32>(rotation.w, rotation.x, rotation.y, rotation.z);
     out_scale_opacity[tri_idx] = vec4<f32>(scale_x, scale_y, scale_z, opacity);
 
-    // --- Set Spherical Harmonics ---
-    // We will set a simple, flat white color.
-    // The first coefficient (DC term) controls the base color.
-    // C0 = 0.28209479177387814
-    let C0 = 1.0;
+    // --- Set Spherical Harmonics (normal-based color) ---
+    // Convert normal [-1,1] to RGB [0,1]
+    let rgb = (normal * 0.5) + vec3<f32>(0.5);
+    
+    // Apply spherical harmonics formula: sh = (rgb - 0.5) / 0.2821
+    let sh_coeff_r = (rgb.r - 0.5) / 0.2821;
+    let sh_coeff_g = (rgb.g - 0.5) / 0.2821;
+    let sh_coeff_b = (rgb.b - 0.5) / 0.2821;
+    
     var sh: SphericalHarmonic;
     
     // Initialize all coefficients to zero
@@ -90,11 +94,10 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         sh.coefficients[i] = 0.0;
     }
     
-    // Set the DC terms for RGB channels (coefficients 0, 16, 32)
-    // These are the first coefficient of each of the 3 color channels
-    sh.coefficients[0] = C0;   // Red DC term
-    sh.coefficients[1] = C0;  // Green DC term  
-    sh.coefficients[2] = C0;  // Blue DC term
+    // Set the DC terms for RGB channels
+    sh.coefficients[0] = sh_coeff_r;   // Red DC term
+    sh.coefficients[1] = sh_coeff_g;   // Green DC term  
+    sh.coefficients[2] = sh_coeff_b;   // Blue DC term
     
     out_spherical_harmonics[tri_idx] = sh;
 }
