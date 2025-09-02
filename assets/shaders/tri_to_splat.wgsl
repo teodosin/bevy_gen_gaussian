@@ -68,8 +68,8 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let rotation = quat_from_unit_vectors(vec3<f32>(0.0, 0.0, 1.0), normal);
 
     // Simple scale based on triangle edge lengths
-    let scale_x = length(v0) / 5.0;
-    let scale_y = length(v1) / 5.0;
+    let scale_x = length(v0) * 0.33;
+    let scale_y = length(v1) * 0.33;
     let scale_z = 0.01; // Surfel thickness
     let opacity = 1.0;
 
