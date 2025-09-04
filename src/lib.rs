@@ -24,9 +24,6 @@ impl Plugin for GenGaussianPlugin {
     }
 }
 
-
-pub use bevy_panorbit_camera::PanOrbitCamera;
-
 // Re-export the main Gaussian APIs for convenience
 pub use gaussian::*;
 

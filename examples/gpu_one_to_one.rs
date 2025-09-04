@@ -27,6 +27,7 @@ const MESH_PATH: &str = "scenes/monkey.glb";
 
 
 
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -41,6 +42,8 @@ fn main() {
         ))
         .run();
 }
+
+
 
 
 
@@ -84,11 +87,15 @@ struct PendingMeshScene(Handle<Scene>);
 
 
 
+
+
 // --- Components ---
 
 /// Marker for the UI info text
 #[derive(Component)]
 struct InfoText;
+
+
 
 
 
@@ -124,6 +131,8 @@ fn setup_scene(mut commands: Commands) {
     // Make CPU-side sort trigger more responsive
     // commands.insert_resource(bevy_gaussian_splatting::sort::SortConfig { period_ms: 16 });
 }
+
+
 
 
 

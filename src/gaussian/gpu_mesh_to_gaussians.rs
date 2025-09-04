@@ -29,8 +29,17 @@ use bevy::{
 
 // From your forked splatting crate
 use bevy_gaussian_splatting::{
-    gaussian::formats::planar_3d::{Gaussian3d, PlanarStorageGaussian3d}, render::CloudPipeline, sort::radix::RadixSortLabel, PlanarGaussian3dHandle
+    gaussian::formats::planar_3d::{
+        PlanarStorageGaussian3d},
+        sort::radix::RadixSortLabel,
+        PlanarGaussian3dHandle
 };
+
+
+
+
+
+
 
 // ------------------------ Per-view params (dynamic uniform @set(1)) ------------------------
 
@@ -44,15 +53,23 @@ pub struct TriToSplatParams {
 /// Index into the dynamic uniform buffer for the current view.
 pub type TriToSplatParamsIndex = DynamicUniformIndex<TriToSplatParams>;
 
+
+
+
+
+
+
 // ---------------------- Inputs (set 0) and planar RW (set 2) ----------------------
 
 /// Per-entity inputs bind group for @group(0).
 /// You create this elsewhere to reflect your actual inputs (positions/indices/etc).
 #[derive(Component)]
 pub struct TriToSplatGpu {
-    pub bind_group_inputs: BindGroup,
-    pub workgroups: UVec3,
+    pub bind_group_inputs:  BindGroup,
+    pub workgroups:         UVec3,
 }
+
+
 
 /// CPU-side inputs collected from a mesh, uploaded to GPU during prepare to back the inputs bind group.
 #[derive(Component, Clone, ExtractComponent)]
@@ -62,11 +79,19 @@ pub struct TriToSplatCpuInput {
     pub tri_count: u32,
 }
 
+
+
 /// **RW** bind group for planar storage used by compute (**@group(2)**).
 #[derive(Component)]
 pub struct PlanarStorageBindGroupRw {
     pub bind_group: BindGroup,
 }
+
+
+
+
+
+
 
 // ---------------- Job Queue (prepared -> consumed) -----------------
 
@@ -78,7 +103,7 @@ struct TriToSplatJob {
 }
 
 #[derive(Resource, Default)]
-struct TriToSplatJobQueue {
+pub struct TriToSplatJobQueue {
     jobs: Vec<TriToSplatJob>,
 }
 
@@ -94,16 +119,24 @@ fn clear_tri_to_splat_jobs(mut job_queue: ResMut<TriToSplatJobQueue>) {
 }
 
 
-// THIS FUNCTION IS THE CORRECTED ONE - it creates a layout with read_only=false
+
+
+
+
+
+/// Creates a layout with read_only=false
 pub fn queue_planar_cloud_rw_bind_group(
     mut commands: Commands,
     rd: Res<RenderDevice>,
     gpu_clouds: Res<RenderAssets<PlanarStorageGaussian3d>>,
-    pipeline: Res<TriToSplatPipeline>, // Use our compute pipeline's layout
+    pipeline: Res<TriToSplatPipeline>,
     q: Query<(Entity, &PlanarGaussian3dHandle)>,
 ) {
+
     bevy::log::info!("queue_planar_cloud_rw_bind_group: begin");
+    
     let mut created = 0usize;
+
     for (entity, handle) in &q {
         let Some(storage) = gpu_clouds.get(&handle.0) else {
             continue;
@@ -135,7 +168,9 @@ pub fn queue_planar_cloud_rw_bind_group(
         commands
             .entity(entity)
             .insert(PlanarStorageBindGroupRw { bind_group: bg });
+
         bevy::log::info!("queue_planar_cloud_rw_bind_group: added PlanarStorageBindGroupRw to entity {entity:?}");
+
         created += 1;
     }
 
@@ -148,6 +183,11 @@ pub fn queue_planar_cloud_rw_bind_group(
 }
 
 
+
+
+
+
+
 /// Create a trivial inputs bind group for each cloud so the compute node can dispatch.
 /// This uses small dummy read-only storage buffers and a tiny uniform to satisfy layout set(0).
 pub fn queue_tri_to_splat_inputs(
@@ -158,31 +198,38 @@ pub fn queue_tri_to_splat_inputs(
     q: Query<(Entity, &PlanarStorageBindGroupRw, &TriToSplatCpuInput)>,
     existing_gpu: Query<(), With<TriToSplatGpu>>,
 ) {
+
     bevy::log::info!("queue_tri_to_splat_inputs: candidates={}", q.iter().len());
+
     let mut created = 0usize;
+
     for (entity, planar_rw, cpu) in &q {
+
         // Skip entities that already have TriToSplatGpu
         if existing_gpu.get(entity).is_ok() {
             bevy::log::info!("queue_tri_to_splat_inputs: skipping entity {entity:?} - already has TriToSplatGpu");
             continue;
         }
+
         bevy::log::info!("queue_tri_to_splat_inputs: processing entity {entity:?}");
+
         // Upload CPU arrays to GPU buffers
-        let ro_flags = BufferUsages::STORAGE | BufferUsages::COPY_DST;
-        let u_flags = BufferUsages::UNIFORM | BufferUsages::COPY_DST;
-        let pos_bytes = bytemuck::cast_slice::<[f32; 4], u8>(&cpu.positions);
-        let idx_bytes = bytemuck::cast_slice::<u32, u8>(&cpu.indices);
+        let ro_flags    = BufferUsages::STORAGE | BufferUsages::COPY_DST;
+        let u_flags     = BufferUsages::UNIFORM | BufferUsages::COPY_DST;
+        let pos_bytes   = bytemuck::cast_slice::<[f32; 4], u8>(&cpu.positions);
+        let idx_bytes   = bytemuck::cast_slice::<u32, u8>(&cpu.indices);
 
         let buf_positions = rd.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("tri_to_splat.positions"),
-            contents: pos_bytes,
-            usage: ro_flags,
+            label:      Some("tri_to_splat.positions"),
+            contents:   pos_bytes,
+            usage:      ro_flags,
         });
         let buf_indices = rd.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("tri_to_splat.indices"),
-            contents: idx_bytes,
-            usage: ro_flags,
+            label:      Some("tri_to_splat.indices"),
+            contents:   idx_bytes,
+            usage:      ro_flags,
         });
+
         // Uniform: pack counts (verts, indices, tris)
         #[repr(C)]
         #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -192,16 +239,18 @@ pub fn queue_tri_to_splat_inputs(
             tris: u32,
             _pad: u32,
         }
+
         let counts = Counts {
-            verts: cpu.positions.len() as u32,
-            indices: cpu.indices.len() as u32,
-            tris: cpu.tri_count,
-            _pad: 0,
+            verts:      cpu.positions.len() as u32,
+            indices:    cpu.indices.len() as u32,
+            tris:       cpu.tri_count,
+            _pad:       0,
         };
+
         let buf_counts = rd.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("tri_to_splat.counts"),
-            contents: bytemuck::bytes_of(&counts),
-            usage: u_flags,
+            label:      Some("tri_to_splat.counts"),
+            contents:   bytemuck::bytes_of(&counts),
+            usage:      u_flags,
         });
 
         let bind_group_inputs = rd.create_bind_group(
@@ -227,29 +276,36 @@ pub fn queue_tri_to_splat_inputs(
             ],
         );
 
-    // Workgroup sizing: match WGSL @workgroup_size(64, 1, 1)
-    let x = (cpu.tri_count + 63) / 64;
+        // Workgroup sizing: match WGSL @workgroup_size(64, 1, 1)
+        let x = (cpu.tri_count + 63) / 64;
+
         bevy::log::info!(
             "queue_tri_to_splat_inputs: uploading {} verts / {} tris; dispatch x={}",
             cpu.positions.len(),
             cpu.tri_count,
             x.max(1)
         );
+
         let workgroups = UVec3::new(x.max(1), 1, 1);
+
         // Enqueue a job for the compute node
         job_queue.jobs.push(TriToSplatJob {
-            inputs_bg: bind_group_inputs.clone(),
-            planar_rw_bg: planar_rw.bind_group.clone(),
+            inputs_bg:      bind_group_inputs.clone(),
+            planar_rw_bg:   planar_rw.bind_group.clone(),
             workgroups,
         });
+
         // Mark entity so we don't enqueue again
         commands.entity(entity).insert(TriToSplatGpu {
             bind_group_inputs: bind_group_inputs,
             workgroups,
         });
+
         bevy::log::info!("queue_tri_to_splat_inputs: added TriToSplatGpu to entity {entity:?}");
+
         created += 1;
     }
+
     if created > 0 {
         bevy::log::info!(
             "queue_tri_to_splat_inputs: created {} inputs bind groups",
@@ -257,6 +313,12 @@ pub fn queue_tri_to_splat_inputs(
         );
     }
 }
+
+
+
+
+
+
 
 // --------------------------------- Pipeline ----------------------------------
 
@@ -417,6 +479,12 @@ impl FromWorld for TriToSplatPipeline {
     }
 }
 
+
+
+
+
+
+
 // ---------------------------------- Node -------------------------------------
 
 /// The compute node; consumes jobs queued during PrepareBindGroups (like the Game of Life example).
@@ -502,6 +570,12 @@ impl ViewNode for TriToSplatNode {
         Ok(())
     }
 }
+
+
+
+
+
+
 
 // ------------------------------ Plugin wiring --------------------------------
 
