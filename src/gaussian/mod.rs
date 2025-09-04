@@ -18,6 +18,7 @@ use bevy::{
 use bevy_gaussian_splatting::{
     gaussian::f32::{PositionVisibility, Rotation, ScaleOpacity},
     SphericalHarmonicCoefficients,
+    sort::SortMode,
 };
 
 /// Component to mark and configure mesh to Gaussian conversion.
@@ -158,7 +159,10 @@ fn process_new_meshes_for_gpu_conversion(
         // Spawn the cloud entity WITH THE CORRECT TRANSFORM.
         commands.spawn((
             bevy_gaussian_splatting::PlanarGaussian3dHandle(cloud_handle.clone()),
-            bevy_gaussian_splatting::CloudSettings::default(),
+            bevy_gaussian_splatting::CloudSettings {
+                sort_mode: SortMode::Radix,
+                ..Default::default()
+            },
             Name::new("GeneratedGaussianCloud"),
             CloudOf(source_entity),
             gpu_mesh_to_gaussians::TriToSplatCpuInput {

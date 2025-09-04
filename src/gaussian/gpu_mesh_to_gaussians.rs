@@ -29,9 +29,7 @@ use bevy::{
 
 // From your forked splatting crate
 use bevy_gaussian_splatting::{
-    gaussian::formats::planar_3d::{Gaussian3d, PlanarStorageGaussian3d},
-    render::CloudPipeline,
-    PlanarGaussian3dHandle,
+    gaussian::formats::planar_3d::{Gaussian3d, PlanarStorageGaussian3d}, render::CloudPipeline, sort::radix::RadixSortLabel, PlanarGaussian3dHandle
 };
 
 // ------------------------ Per-view params (dynamic uniform @set(1)) ------------------------
@@ -546,9 +544,8 @@ impl Plugin for TriToSplatPlugin {
             .add_render_graph_edges(
                 Core3d,
                 (
-                    Node3d::StartMainPass,
                     TriToSplatNodeLabel,
-                    Node3d::EndMainPass,
+                    RadixSortLabel,
                 ),
             );
     }
