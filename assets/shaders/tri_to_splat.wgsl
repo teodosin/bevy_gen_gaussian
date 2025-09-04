@@ -5,42 +5,64 @@ struct SphericalHarmonic {
     coefficients: array<f32, 48>,
 }
 
+
 // Input buffers (read-only)
-@group(0) @binding(0) var<storage, read> positions: array<vec4<f32>>;
-@group(0) @binding(1) var<storage, read> indices: array<u32>;
+@group(0) @binding(0) var<storage, read>    positions:     array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read>    indices:       array<u32>;
+
 
 // Output buffers (read-write)
 // These now match the memory layout of PlanarStorageGaussian3d
-@group(2) @binding(0) var<storage, read_write> out_position_visibility: array<vec4<f32>>;
-@group(2) @binding(1) var<storage, read_write> out_spherical_harmonics: array<SphericalHarmonic>;
-@group(2) @binding(2) var<storage, read_write> out_rotation: array<vec4<f32>>;
-@group(2) @binding(3) var<storage, read_write> out_scale_opacity: array<vec4<f32>>;
+@group(2) @binding(0) var<storage, read_write>      out_position_visibility:     array<vec4<f32>>;
+@group(2) @binding(1) var<storage, read_write>      out_spherical_harmonics:     array<SphericalHarmonic>;
+@group(2) @binding(2) var<storage, read_write>      out_rotation:                array<vec4<f32>>;
+@group(2) @binding(3) var<storage, read_write>      out_scale_opacity:           array<vec4<f32>>;
+
+
+
+
+
+
 
 // Helper function to create a quaternion from two unit vectors
 fn quat_from_unit_vectors(u: vec3<f32>, v: vec3<f32>) -> vec4<f32> {
+
     // Check for parallel vectors to avoid issues with cross product
     if (dot(u, v) > 0.99999) {
+
         return vec4<f32>(0.0, 0.0, 0.0, 1.0); // Identity quaternion
     }
+
     if (dot(u, v) < -0.99999) {
+
         // Handle 180 degree rotation
         var axis = vec3<f32>(1.0, 0.0, 0.0);
+
         if (abs(u.x) > 0.9) {
             axis = vec3<f32>(0.0, 1.0, 0.0);
         }
+
         let w = cross(u, axis);
         let q = vec4<f32>(w.x, w.y, w.z, 0.0);
+
         return normalize(q);
     }
 
     let w = cross(u, v);
     let q = vec4<f32>(w.x, w.y, w.z, 1.0 + dot(u, v));
+
     return normalize(q);
 }
 
 
+
+
+
+
+
 @compute @workgroup_size(64, 1, 1)
 fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+
     let tri_idx = global_id.x;
 
     // Guard against out-of-bounds access if the number of triangles isn't a multiple of the workgroup size.
@@ -57,6 +79,7 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let p1 = positions[i1].xyz;
     let p2 = positions[i2].xyz;
 
+
     // --- Calculate Splat Properties ---
     let center = (p0 + p1 + p2) / 3.0;
 
@@ -64,24 +87,29 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let v1 = p2 - p0;
     let normal = normalize(cross(v0, v1));
 
+
     // Simple rotation to align z-axis with the triangle normal
     let rotation = quat_from_unit_vectors(vec3<f32>(0.0, 0.0, 1.0), normal);
+
 
     // Simple scale based on triangle edge lengths
     let scale_x = length(v0) * 0.33;
     let scale_y = length(v1) * 0.33;
-    let scale_z = 0.05; // Surfel thickness
+    let scale_z = 0.05; // Surfel thickness - TODO: Use the MeshToGaussian component for this
     let opacity = 1.0;
 
+
     // --- Write to Output Buffers ---
-    out_position_visibility[tri_idx] = vec4<f32>(center, 1.0);
-    out_rotation[tri_idx] = vec4<f32>(rotation.w, rotation.x, rotation.y, rotation.z);
-    out_scale_opacity[tri_idx] = vec4<f32>(scale_x, scale_y, scale_z, opacity);
+    out_position_visibility[tri_idx]    = vec4<f32>(center, 1.0);
+    out_rotation[tri_idx]               = vec4<f32>(rotation.w, rotation.x, rotation.y, rotation.z);
+    out_scale_opacity[tri_idx]          = vec4<f32>(scale_x, scale_y, scale_z, opacity);
+
 
     // --- Set Spherical Harmonics (normal-based color) ---
     // Convert normal [-1,1] to RGB [0,1]
     let rgb = (normal * 0.5) + vec3<f32>(0.5);
     
+
     // Apply spherical harmonics formula: sh = (rgb - 0.5) / 0.2821
     let sh_coeff_r = (rgb.r - 0.5) / 0.2821;
     let sh_coeff_g = (rgb.g - 0.5) / 0.2821;
@@ -89,15 +117,18 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     var sh: SphericalHarmonic;
     
+
     // Initialize all coefficients to zero
     for (var i = 0; i < 48; i = i + 1) {
         sh.coefficients[i] = 0.0;
     }
     
+
     // Set the DC terms for RGB channels
     sh.coefficients[0] = sh_coeff_r;   // Red DC term
     sh.coefficients[1] = sh_coeff_g;   // Green DC term  
     sh.coefficients[2] = sh_coeff_b;   // Blue DC term
+    
     
     out_spherical_harmonics[tri_idx] = sh;
 }

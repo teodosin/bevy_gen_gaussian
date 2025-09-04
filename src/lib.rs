@@ -31,7 +31,6 @@ pub use gaussian::*;
 pub mod prelude {
     pub use crate::gaussian::{
         cpu_mesh_to_gaussians::*,
-        cpu_transform::*,
         settings::*,
         gpu_mesh_to_gaussians::*,
     };

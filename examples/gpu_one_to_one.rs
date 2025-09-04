@@ -13,7 +13,6 @@
 //! - Q/E: Zoom in and out
 
 use bevy::prelude::*;
-use bevy::render::mesh::{};
 
 use bevy_gaussian_splatting::{ GaussianCamera };
 use bevy::ui::Val::Px;
@@ -33,13 +32,19 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugins(GenGaussianPlugin)
 
-        .init_resource::<CloudVisibility>()
-        .init_resource::<ConversionMetrics>()
-        .add_systems(Startup, (setup_scene, setup_ui, load_mesh))
+        .add_systems(Startup,
+            (
+                setup_scene,
+                setup_ui,
+                load_mesh
+            )
+        )
+
         .add_systems(Update, (
             camera_controls,
             update_info_text,
         ))
+
         .run();
 }
 
@@ -50,34 +55,6 @@ fn main() {
 
 
 // --- Resources ---
-
-/// Resource tracking which types of splats are currently visible
-#[derive(Resource)]
-struct CloudVisibility {
-    vertices: bool,
-    edges: bool,
-    faces: bool,
-}
-
-/// Resource tracking conversion performance metrics
-#[derive(Resource, Default)]
-struct ConversionMetrics {
-    conversion_time_ms: f32,
-    total_gaussians: usize,
-    vertex_count: usize,
-    edge_count: usize,
-    face_count: usize,
-}
-
-impl Default for CloudVisibility {
-    fn default() -> Self {
-        Self {
-            vertices: true,  // Start with vertices visible
-            edges: false,
-            faces: false,
-        }
-    }
-}
 
 /// Resource holding the scene handle while waiting for it to load
 #[derive(Resource, Default)]
@@ -129,7 +106,7 @@ fn setup_scene(mut commands: Commands) {
     ));
 
     // Make CPU-side sort trigger more responsive
-    // commands.insert_resource(bevy_gaussian_splatting::sort::SortConfig { period_ms: 16 });
+    commands.insert_resource(bevy_gaussian_splatting::sort::SortConfig { period_ms: 16 });
 }
 
 
@@ -139,7 +116,10 @@ fn setup_scene(mut commands: Commands) {
 
 
 /// Set up the UI overlay showing controls and status
-fn setup_ui(mut commands: Commands) {
+fn setup_ui(
+    mut commands: Commands
+) {
+
     commands.spawn((
         Text::new("Loading mesh..."),
         TextFont {
@@ -148,9 +128,9 @@ fn setup_ui(mut commands: Commands) {
         },
         TextColor(Color::srgb(1.0, 1.0, 1.0)),
         Node {
-            position_type: PositionType::Absolute,
-            top: Px(10.0),
-            left: Px(10.0),
+            position_type:  PositionType::Absolute,
+            top:            Px(10.0),
+            left:           Px(10.0),
             ..default()
         },
         InfoText,
@@ -161,8 +141,13 @@ fn setup_ui(mut commands: Commands) {
 
 
 
+
+
 /// Load the mesh asset and prepare for conversion
-fn load_mesh(mut commands: Commands, assets: Res<AssetServer>) {
+fn load_mesh(
+    mut commands:   Commands,
+    assets:         Res<AssetServer>
+) {
 
     let scene: Handle<Scene> = assets.load(MESH_PATH.to_string() + "#Scene0");
 
@@ -173,13 +158,14 @@ fn load_mesh(mut commands: Commands, assets: Res<AssetServer>) {
         Transform::default(),
         Visibility::Visible,
         MeshToGaussian {
-            mode: MeshToGaussianMode::TrianglesOneToOne,
-            surfel_thickness: 0.01,
-            hide_source_mesh: true,
-            realtime: false,
+            mode:               MeshToGaussianMode::TrianglesOneToOne,
+            surfel_thickness:   0.01,
+            hide_source_mesh:   true,
+            realtime:           false,
         },
     ));
 }
+
 
 
 
@@ -190,22 +176,25 @@ fn load_mesh(mut commands: Commands, assets: Res<AssetServer>) {
 
 /// Camera orbit controls using WASD keys and QE for zoom
 fn camera_controls(
-    mut camera_query: Query<&mut Transform, With<GaussianCamera>>,
-    input: Res<ButtonInput<KeyCode>>,
-    time: Res<Time>,
+    mut camera_query:   Query<&mut Transform, With<GaussianCamera>>,
+    input:              Res<ButtonInput<KeyCode>>,
+    time:               Res<Time>,
 ) {
+
     let Ok(mut camera_transform) = camera_query.single_mut() else { return };
     
-    const ROTATION_SPEED: f32 = 1.5; // radians per second
-    const ZOOM_SPEED: f32 = 5.0;     // units per second
+    const ROTATION_SPEED: f32   = 1.5; // radians per second
+    const ZOOM_SPEED: f32       = 5.0;     // units per second
     
     let mut distance = camera_transform.translation.length();
     
+
     // Convert current position to spherical coordinates
-    let current_pos = camera_transform.translation;
-    let mut azimuth = current_pos.z.atan2(current_pos.x);   // rotation around Y-axis
-    let mut elevation = (current_pos.y / distance).asin();  // angle from XZ-plane
+    let current_pos     = camera_transform.translation;
+    let mut azimuth     = current_pos.z.atan2(current_pos.x);   // rotation around Y-axis
+    let mut elevation   = (current_pos.y / distance).asin();  // angle from XZ-plane
     
+
     // Handle rotation input
     if input.pressed(KeyCode::KeyD) {
         azimuth += ROTATION_SPEED * time.delta_secs();
@@ -229,8 +218,8 @@ fn camera_controls(
     }
     
     // Clamp values to reasonable bounds
-    elevation = elevation.clamp(-std::f32::consts::FRAC_PI_2 + 0.1, std::f32::consts::FRAC_PI_2 - 0.1);
-    distance = distance.clamp(1.0, 50.0);
+    elevation   = elevation.clamp(-std::f32::consts::FRAC_PI_2 + 0.1, std::f32::consts::FRAC_PI_2 - 0.1);
+    distance    = distance.clamp(1.0, 50.0);
     
     // Convert back to Cartesian coordinates
     let new_position = Vec3::new(
@@ -245,15 +234,18 @@ fn camera_controls(
 }
 
 
+
+
+
+
+
 /// Update the UI text showing controls and current state
 fn update_info_text(
     mut text_query: Query<&mut Text, With<InfoText>>,
-    metrics: Res<ConversionMetrics>,
 ) {
+
     let Ok(mut text) = text_query.single_mut() else { return };
 
-    
-    // Display conversion metrics if available
     **text = format!(
         "Mesh to Gaussian Splats Demo\n\
         \n\

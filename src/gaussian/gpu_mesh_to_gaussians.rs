@@ -9,7 +9,7 @@
 //! Make sure you load the shader as "tri_to_splat.wgsl" in your assets.
 
 use bevy::{
-    core_pipeline::core_3d::graph::{Core3d, Node3d},
+    core_pipeline::core_3d::graph::Core3d,
     ecs::query::QueryItem,
     prelude::*,
     render::{
@@ -606,7 +606,7 @@ pub struct TriToSplatPlugin;
 
 impl Plugin for TriToSplatPlugin {
     fn build(&self, app: &mut App) {
-        
+
         app.add_plugins((
             ExtractComponentPlugin::<TriToSplatParams>::default(),
             UniformComponentPlugin::<TriToSplatParams>::default(),
