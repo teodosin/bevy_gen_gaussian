@@ -160,7 +160,7 @@ fn process_new_meshes_for_gpu_conversion(
         commands.spawn((
             bevy_gaussian_splatting::PlanarGaussian3dHandle(cloud_handle.clone()),
             bevy_gaussian_splatting::CloudSettings {
-                sort_mode: SortMode::Radix,
+                sort_mode: SortMode::Rayon,
                 ..Default::default()
             },
             Name::new("GeneratedGaussianCloud"),
