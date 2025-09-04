@@ -120,6 +120,9 @@ fn setup_scene(mut commands: Commands) {
         Transform::from_xyz(2.0, 4.0, 2.0)
             .looking_at(Vec3::ZERO, Vec3::Y),
     ));
+
+    // Make CPU-side sort trigger more responsive
+    // commands.insert_resource(bevy_gaussian_splatting::sort::SortConfig { period_ms: 16 });
 }
 
 

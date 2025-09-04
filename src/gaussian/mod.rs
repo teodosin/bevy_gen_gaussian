@@ -156,6 +156,25 @@ fn process_new_meshes_for_gpu_conversion(
         };
         let cloud_handle = clouds.add(cloud_asset);
 
+        // Seed CPU-side positions for sorting: compute triangle centroids in local space.
+        // if let Some(cloud) = clouds.get_mut(&cloud_handle) {
+        //     for (i, tri) in indices.chunks(3).enumerate() {
+        //         if tri.len() < 3 { break; }
+        //         let p0 = pos[tri[0] as usize];
+        //         let p1 = pos[tri[1] as usize];
+        //         let p2 = pos[tri[2] as usize];
+        //         let centroid = [
+        //             (p0[0] + p1[0] + p2[0]) / 3.0,
+        //             (p0[1] + p1[1] + p2[1]) / 3.0,
+        //             (p0[2] + p1[2] + p2[2]) / 3.0,
+        //         ];
+        //         if let Some(pv) = cloud.position_visibility.get_mut(i) {
+        //             pv.position = centroid;
+        //             pv.visibility = 1.0;
+        //         }
+        //     }
+        // }
+
         // Spawn the cloud entity WITH THE CORRECT TRANSFORM.
         commands.spawn((
             bevy_gaussian_splatting::PlanarGaussian3dHandle(cloud_handle.clone()),

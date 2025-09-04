@@ -70,7 +70,7 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Simple scale based on triangle edge lengths
     let scale_x = length(v0) * 0.33;
     let scale_y = length(v1) * 0.33;
-    let scale_z = 0.01; // Surfel thickness
+    let scale_z = 0.05; // Surfel thickness
     let opacity = 1.0;
 
     // --- Write to Output Buffers ---
