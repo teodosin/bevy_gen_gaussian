@@ -74,9 +74,9 @@ pub struct TriToSplatGpu {
 /// CPU-side inputs collected from a mesh, uploaded to GPU during prepare to back the inputs bind group.
 #[derive(Component, Clone, ExtractComponent)]
 pub struct TriToSplatCpuInput {
-    pub positions: Vec<[f32; 4]>,
-    pub indices: Vec<u32>,
-    pub tri_count: u32,
+    pub positions:  Vec<[f32; 4]>,
+    pub indices:    Vec<u32>,
+    pub tri_count:  u32,
 }
 
 
@@ -97,9 +97,9 @@ pub struct PlanarStorageBindGroupRw {
 
 #[derive(Clone)]
 struct TriToSplatJob {
-    inputs_bg: BindGroup,
-    planar_rw_bg: BindGroup,
-    workgroups: UVec3,
+    inputs_bg:      BindGroup,
+    planar_rw_bg:   BindGroup,
+    workgroups:     UVec3,
 }
 
 #[derive(Resource, Default)]
@@ -108,7 +108,10 @@ pub struct TriToSplatJobQueue {
 }
 
 /// Clear queued compute jobs at the start of the Render frame so we only dispatch once per frame
-fn clear_tri_to_splat_jobs(mut job_queue: ResMut<TriToSplatJobQueue>) {
+fn clear_tri_to_splat_jobs(
+    mut job_queue: ResMut<TriToSplatJobQueue>
+) {
+
     if !job_queue.jobs.is_empty() {
         bevy::log::info!(
             "clear_tri_to_splat_jobs: clearing {} queued job(s)",
@@ -126,11 +129,11 @@ fn clear_tri_to_splat_jobs(mut job_queue: ResMut<TriToSplatJobQueue>) {
 
 /// Creates a layout with read_only=false
 pub fn queue_planar_cloud_rw_bind_group(
-    mut commands: Commands,
-    rd: Res<RenderDevice>,
-    gpu_clouds: Res<RenderAssets<PlanarStorageGaussian3d>>,
-    pipeline: Res<TriToSplatPipeline>,
-    q: Query<(Entity, &PlanarGaussian3dHandle)>,
+    mut commands:   Commands,
+    rd:             Res<RenderDevice>,
+    gpu_clouds:     Res<RenderAssets<PlanarStorageGaussian3d>>,
+    pipeline:       Res<TriToSplatPipeline>,
+    q:              Query<(Entity, &PlanarGaussian3dHandle)>,
 ) {
 
     bevy::log::info!("queue_planar_cloud_rw_bind_group: begin");
@@ -191,12 +194,12 @@ pub fn queue_planar_cloud_rw_bind_group(
 /// Create a trivial inputs bind group for each cloud so the compute node can dispatch.
 /// This uses small dummy read-only storage buffers and a tiny uniform to satisfy layout set(0).
 pub fn queue_tri_to_splat_inputs(
-    mut commands: Commands,
-    rd: Res<RenderDevice>,
-    pipe: Res<TriToSplatPipeline>,
-    mut job_queue: ResMut<TriToSplatJobQueue>,
-    q: Query<(Entity, &PlanarStorageBindGroupRw, &TriToSplatCpuInput)>,
-    existing_gpu: Query<(), With<TriToSplatGpu>>,
+    mut commands:   Commands,
+    rd:             Res<RenderDevice>,
+    pipe:           Res<TriToSplatPipeline>,
+    mut job_queue:  ResMut<TriToSplatJobQueue>,
+    q:              Query<(Entity, &PlanarStorageBindGroupRw, &TriToSplatCpuInput)>,
+    existing_gpu:   Query<(), With<TriToSplatGpu>>,
 ) {
 
     bevy::log::info!("queue_tri_to_splat_inputs: candidates={}", q.iter().len());
@@ -331,9 +334,11 @@ pub struct TriToSplatPipeline {
 }
 
 impl FromWorld for TriToSplatPipeline {
+
     fn from_world(world: &mut World) -> Self {
-        let rd = world.resource::<RenderDevice>();
-        let asset_server = world.resource::<AssetServer>();
+
+        let rd           =  world.resource::<RenderDevice>();
+        let asset_server =  world.resource::<AssetServer>();
 
         // @group(0): inputs (you can adjust entries to mirror your actual inputs bind group)
         let inputs_layout = rd.create_bind_group_layout(
@@ -341,7 +346,7 @@ impl FromWorld for TriToSplatPipeline {
             &[
                 // 0 = RO storage buffer (e.g., positions table)
                 BindGroupLayoutEntry {
-                    binding: 0,
+                    binding:    0,
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Storage { read_only: true },
@@ -350,6 +355,7 @@ impl FromWorld for TriToSplatPipeline {
                     },
                     count: None,
                 },
+
                 // 1 = RO storage buffer (e.g., triangle indices)
                 BindGroupLayoutEntry {
                     binding: 1,
@@ -361,6 +367,7 @@ impl FromWorld for TriToSplatPipeline {
                     },
                     count: None,
                 },
+
                 // 2 = RO storage buffer (optional extra)
                 BindGroupLayoutEntry {
                     binding: 2,
@@ -372,6 +379,7 @@ impl FromWorld for TriToSplatPipeline {
                     },
                     count: None,
                 },
+
                 // 3 = non-dynamic uniform (optional per-job constants)
                 BindGroupLayoutEntry {
                     binding: 3,
@@ -404,7 +412,6 @@ impl FromWorld for TriToSplatPipeline {
         );
 
         // @group(2): planar RW layout (must match queue system + shader)
-        // THIS IS THE CRITICAL FIX: `read_only` is now correctly `false`
         let planar_rw_layout = rd.create_bind_group_layout(
             "storage_gaussian_3d_rw_layout",
             &[
@@ -412,37 +419,40 @@ impl FromWorld for TriToSplatPipeline {
                     binding: 0,
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: false }, // CORRECT
+                        ty: BufferBindingType::Storage { read_only: false },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
                 },
+
                 BindGroupLayoutEntry {
                     binding: 1,
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: false }, // CORRECT
+                        ty: BufferBindingType::Storage { read_only: false },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
                 },
+
                 BindGroupLayoutEntry {
                     binding: 2,
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: false }, // CORRECT
+                        ty: BufferBindingType::Storage { read_only: false },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
                 },
+
                 BindGroupLayoutEntry {
                     binding: 3,
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: false }, // CORRECT
+                        ty: BufferBindingType::Storage { read_only: false },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
@@ -457,7 +467,7 @@ impl FromWorld for TriToSplatPipeline {
         let pipeline = world
             .resource_mut::<PipelineCache>()
             .queue_compute_pipeline(ComputePipelineDescriptor {
-                label: Some("tri_to_splat_pipeline".into()),
+                label:  Some("tri_to_splat_pipeline".into()),
                 layout: vec![
                     inputs_layout.clone(),
                     params_layout.clone(),
@@ -502,26 +512,31 @@ impl ViewNode for TriToSplatNode {
 
     fn run(
         &self,
-        _graph: &mut RenderGraphContext,
-        rcx: &mut RenderContext,
-        (_params, params_ix): QueryItem<Self::ViewQuery>,
-        world: &World,
+        _graph:                 &mut RenderGraphContext,
+        rcx:                    &mut RenderContext,
+        (_params, params_ix):   QueryItem<Self::ViewQuery>,
+        world:                  &World,
     ) -> Result<(), NodeRunError> {
+
         bevy::log::info!("TriToSplatNode: run() called");
         
-        let cache = world.resource::<PipelineCache>();
-        let pipe = world.resource::<TriToSplatPipeline>();
+        let cache   = world.resource::<PipelineCache>();
+        let pipe    = world.resource::<TriToSplatPipeline>();
+
         let Some(compute) = cache.get_compute_pipeline(pipe.pipeline) else {
             bevy::log::warn!("TriToSplatNode: compute pipeline not ready yet");
             return Ok(());
         };
+
         bevy::log::info!("TriToSplatNode: compute pipeline is ready");
 
         let params_uniforms = world.resource::<ComponentUniforms<TriToSplatParams>>();
+
         let Some(params_binding) = params_uniforms.uniforms().binding() else {
             bevy::log::warn!("TriToSplatNode: TriToSplatParams uniform buffer not initialized yet");
             return Ok(());
         };
+
         bevy::log::info!("TriToSplatNode: params uniform buffer is ready");
         
         let params_bg = rcx.render_device().create_bind_group(
@@ -540,13 +555,17 @@ impl ViewNode for TriToSplatNode {
                 label: Some("tri_to_splat.compute"),
                 timestamp_writes: None,
             });
+
         pass.set_pipeline(compute);
         pass.set_bind_group(1, &params_bg, &[params_ix.index()]);
+
         bevy::log::info!("TriToSplatNode: bound params with index {}", params_ix.index());
 
         // Dispatch queued jobs
         let mut job_count = 0usize;
+
         if let Some(queue) = world.get_resource::<TriToSplatJobQueue>() {
+
             for job in &queue.jobs {
                 bevy::log::info!(
                     "TriToSplatNode: dispatching workgroups({}, {}, {})",
@@ -557,6 +576,7 @@ impl ViewNode for TriToSplatNode {
                 pass.dispatch_workgroups(job.workgroups.x, job.workgroups.y, job.workgroups.z);
                 job_count += 1;
             }
+
         } else {
             bevy::log::warn!("TriToSplatNode: TriToSplatJobQueue resource missing");
         }
@@ -586,6 +606,7 @@ pub struct TriToSplatPlugin;
 
 impl Plugin for TriToSplatPlugin {
     fn build(&self, app: &mut App) {
+        
         app.add_plugins((
             ExtractComponentPlugin::<TriToSplatParams>::default(),
             UniformComponentPlugin::<TriToSplatParams>::default(),
@@ -595,7 +616,9 @@ impl Plugin for TriToSplatPlugin {
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
+
         bevy::log::info!("TriToSplatPlugin.build: configuring render systems and graph node");
+
         render_app
             .init_resource::<TriToSplatJobQueue>()
             .add_systems(
