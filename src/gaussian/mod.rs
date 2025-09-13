@@ -214,23 +214,23 @@ fn process_new_meshes_for_gpu_conversion(
         // can't sort them. The following block sets the positions manually on the CPU and
         // is only here to demonstrate this issue. Once Radix sorting is working, the data
         // won't have to leave the GPU.
-        if let Some(cloud) = clouds.get_mut(&cloud_handle) {
-            for (i, tri) in indices.chunks(3).enumerate() {
-                if tri.len() < 3 { break; }
-                let p0  = pos[tri[0] as usize];
-                let p1  = pos[tri[1] as usize];
-                let p2  = pos[tri[2] as usize];
-                let centroid = [
-                    (p0[0] + p1[0] + p2[0]) / 3.0,
-                    (p0[1] + p1[1] + p2[1]) / 3.0,
-                    (p0[2] + p1[2] + p2[2]) / 3.0,
-                ];
-                if let Some(pv) = cloud.position_visibility.get_mut(i) {
-                    pv.position = centroid;
-                    pv.visibility = 1.0;
-                }
-            }
-        }
+        // if let Some(cloud) = clouds.get_mut(&cloud_handle) {
+        //     for (i, tri) in indices.chunks(3).enumerate() {
+        //         if tri.len() < 3 { break; }
+        //         let p0  = pos[tri[0] as usize];
+        //         let p1  = pos[tri[1] as usize];
+        //         let p2  = pos[tri[2] as usize];
+        //         let centroid = [
+        //             (p0[0] + p1[0] + p2[0]) / 3.0,
+        //             (p0[1] + p1[1] + p2[1]) / 3.0,
+        //             (p0[2] + p1[2] + p2[2]) / 3.0,
+        //         ];
+        //         if let Some(pv) = cloud.position_visibility.get_mut(i) {
+        //             pv.position = centroid;
+        //             pv.visibility = 1.0;
+        //         }
+        //     }
+        // }
         // --- end demonstration ---
 
 
@@ -239,7 +239,7 @@ fn process_new_meshes_for_gpu_conversion(
         commands.spawn((
             bevy_gaussian_splatting::PlanarGaussian3dHandle(cloud_handle.clone()),
             bevy_gaussian_splatting::CloudSettings {
-                sort_mode: SortMode::Rayon,
+                sort_mode: SortMode::Radix,
                 ..Default::default()
             },
             Name::new("GeneratedGaussianCloud"),
@@ -285,7 +285,8 @@ fn process_new_meshes_for_gpu_conversion(
 fn update_tri_to_splat_params(
     mut commands:       Commands,
     q_cloud_inputs:     Query<&gpu_mesh_to_gaussians::TriToSplatCpuInput>,
-    q_cameras:          Query<Entity, With<Camera3d>>,
+    q_cameras:          Query<Entity, With<Camera3d>>, 
+    time:               Res<Time>,
 ) {
 
     let input_count = q_cloud_inputs.iter().count();
@@ -300,15 +301,43 @@ fn update_tri_to_splat_params(
 
     if max_gauss == 0 { 
         bevy::log::info!("update_tri_to_splat_params: no gaussians to process");
-        return; 
+        // Still update time params so shader has a valid uniform if needed.
     }
 
     let camera_count = q_cameras.iter().count();
     bevy::log::info!("update_tri_to_splat_params: updating {} cameras with max_gauss={}", camera_count, max_gauss);
 
+    let elapsed = time.elapsed_secs();
+
+    // Compute an approximate bounding sphere from the first available input's bounds.
+    // If none, fall back to origin and unit radius.
+    let mut sphere_center = Vec3::ZERO;
+    let mut sphere_radius = 1.0f32;
+
+    if let Some(input) = q_cloud_inputs.iter().next() {
+        // Compute AABB from positions
+        let mut min_v = Vec3::splat(f32::INFINITY);
+        let mut max_v = Vec3::splat(f32::NEG_INFINITY);
+        for p4 in &input.positions {
+            let p = Vec3::new(p4[0], p4[1], p4[2]);
+            min_v = min_v.min(p);
+            max_v = max_v.max(p);
+        }
+        sphere_center = (min_v + max_v) * 0.5;
+        let half_extents = (max_v - min_v) * 0.5;
+        sphere_radius = half_extents.length(); // bounding sphere radius
+        if !sphere_radius.is_finite() || sphere_radius <= 0.0 {
+            sphere_radius = 1.0;
+        }
+    }
     for cam in &q_cameras {
         commands.entity(cam).insert(gpu_mesh_to_gaussians::TriToSplatParams {
-            gaussian_count: max_gauss,
+            gaussian_count:   max_gauss,
+            elapsed_seconds:  elapsed,
+            duration_seconds: 3.0,
+            _pad:             0.0,
+            sphere_center,
+            sphere_radius,
         });
     }
 }

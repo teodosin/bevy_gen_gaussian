@@ -47,7 +47,17 @@ use bevy_gaussian_splatting::{
 /// Keep it minimal; extend as needed (must remain `ShaderType`).
 #[derive(Component, Clone, Copy, Default, ExtractComponent, ShaderType)]
 pub struct TriToSplatParams {
-    pub gaussian_count: u32,
+    // Number of gaussians to process (max across clouds); informative for shader-side bounds.
+    pub gaussian_count:   u32,
+    // Global elapsed time in seconds; used to drive hardcoded morph timelines.
+    pub elapsed_seconds:  f32,
+    // Hardcoded morph duration in seconds (can be overridden per-scene later).
+    pub duration_seconds: f32,
+    // Padding to keep std140-like 16-byte alignment for the uniform struct.
+    pub _pad:             f32,
+    // Starting sphere for spawn positions (center and radius)
+    pub sphere_center:    Vec3,
+    pub sphere_radius:    f32,
 }
 
 /// Index into the dynamic uniform buffer for the current view.
@@ -199,7 +209,7 @@ pub fn queue_tri_to_splat_inputs(
     pipe:           Res<TriToSplatPipeline>,
     mut job_queue:  ResMut<TriToSplatJobQueue>,
     q:              Query<(Entity, &PlanarStorageBindGroupRw, &TriToSplatCpuInput)>,
-    existing_gpu:   Query<(), With<TriToSplatGpu>>,
+    existing_gpu:   Query<(), With<TriToSplatGpu>>, 
 ) {
 
     bevy::log::info!("queue_tri_to_splat_inputs: candidates={}", q.iter().len());
@@ -313,6 +323,29 @@ pub fn queue_tri_to_splat_inputs(
         bevy::log::info!(
             "queue_tri_to_splat_inputs: created {} inputs bind groups",
             created
+        );
+    }
+}
+/// Re-enqueue compute jobs every frame for entities that already have GPU bind groups.
+/// This makes the compute pass continuous without re-uploading buffers.
+pub fn requeue_existing_tri_to_splat_jobs(
+    mut job_queue:  ResMut<TriToSplatJobQueue>,
+    q:              Query<(&TriToSplatGpu, &PlanarStorageBindGroupRw)>,
+){
+    let mut count = 0usize;
+    for (gpu, planar_rw) in &q {
+        job_queue.jobs.push(TriToSplatJob {
+            inputs_bg:      gpu.bind_group_inputs.clone(),
+            planar_rw_bg:   planar_rw.bind_group.clone(),
+            workgroups:     gpu.workgroups,
+        });
+        count += 1;
+    }
+
+    if count > 0 {
+        bevy::log::info!(
+            "requeue_existing_tri_to_splat_jobs: queued {} job(s) for this frame",
+            count
         );
     }
 }
@@ -633,9 +666,15 @@ impl Plugin for TriToSplatPlugin {
             )
             .add_systems(
                 Render,
-                queue_tri_to_splat_inputs
-                    .in_set(RenderSet::PrepareBindGroups)
-                    .after(queue_planar_cloud_rw_bind_group),
+                (
+                    queue_tri_to_splat_inputs
+                        .in_set(RenderSet::PrepareBindGroups)
+                        .after(queue_planar_cloud_rw_bind_group),
+                    // After we've created bind groups for any new entities, re-enqueue all existing jobs.
+                    requeue_existing_tri_to_splat_jobs
+                        .in_set(RenderSet::PrepareBindGroups)
+                        .after(queue_tri_to_splat_inputs),
+                ),
             )
             .add_render_graph_node::<ViewNodeRunner<TriToSplatNode>>(Core3d, TriToSplatNodeLabel)
             .add_render_graph_edges(
