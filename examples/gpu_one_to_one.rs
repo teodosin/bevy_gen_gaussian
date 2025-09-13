@@ -92,10 +92,19 @@ fn setup_scene(mut commands: Commands) {
     commands.spawn((
         GaussianCamera { warmup: true },
         Camera3d::default(),
-        Camera { order: 0, ..default() },
+        Camera {
+            order: 0,
+            clear_color: ClearColorConfig::Custom(Color::BLACK),
+            ..default()
+        },
         Transform::from_translation(Vec3::new(0.0, 1.0, 8.0))
             .looking_at(Vec3::ZERO, Vec3::Y),
-        TriToSplatParams { gaussian_count: 1_000, ..default() }
+        TriToSplatParams {
+            gaussian_count: 1_000,
+            light_dir: Vec3::new(0.6, 0.7, 0.4).normalize(),
+            base_color: Vec3::new(0.55, 0.62, 0.75),
+            ..default()
+        }
     ));
 
     // Directional light to illuminate the scene

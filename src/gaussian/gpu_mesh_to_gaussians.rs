@@ -58,6 +58,11 @@ pub struct TriToSplatParams {
     // Starting sphere for spawn positions (center and radius)
     pub sphere_center:    Vec3,
     pub sphere_radius:    f32,
+    // Lighting params for per-frame shading in compute shader
+    pub light_dir:        Vec3,
+    pub _pad2:            f32,
+    pub base_color:       Vec3,
+    pub _pad3:            f32,
 }
 
 /// Index into the dynamic uniform buffer for the current view.

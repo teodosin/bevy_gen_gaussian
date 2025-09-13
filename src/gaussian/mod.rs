@@ -338,6 +338,10 @@ fn update_tri_to_splat_params(
             _pad:             0.0,
             sphere_center,
             sphere_radius,
+            light_dir:        Vec3::new(0.6, 0.7, 0.4).normalize(),
+            _pad2:            0.0,
+            base_color:       Vec3::new(0.55, 0.62, 0.75), // bluish grey
+            _pad3:            0.0,
         });
     }
 }

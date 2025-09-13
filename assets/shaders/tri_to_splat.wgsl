@@ -18,6 +18,11 @@ struct TriToSplatParams {
     _pad:             f32,
     sphere_center:    vec3<f32>,
     sphere_radius:    f32,
+    // Lighting params
+    light_dir:        vec3<f32>,
+    _pad2:            f32,
+    base_color:       vec3<f32>,
+    _pad3:            f32,
 }
 @group(1) @binding(0) var<uniform> params: TriToSplatParams;
 
@@ -160,6 +165,12 @@ fn hash21(n: f32) -> vec2<f32> {
     );
 }
 
+// Rotate vector by quaternion q (x,y,z,w) assuming q is normalized
+fn rotate_vec_by_quat(v: vec3<f32>, q: vec4<f32>) -> vec3<f32> {
+    let t = 2.0 * cross(q.xyz, v);
+    return v + q.w * t + cross(q.xyz, t);
+}
+
 
 
 @compute @workgroup_size(64, 1, 1)
@@ -218,8 +229,8 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let start_pos = params.sphere_center + dir * params.sphere_radius;
     var pos_out   = mix(start_pos, center, t);
 
-    // Start visible with a larger base size (2x) and non-zero opacity
-    let start_scale_factor = 2.0; // 200% of final per-axis size at t=0
+    // Start visible with a modest base size boost (~30%) and non-zero opacity
+    let start_scale_factor = 2.6; // 130% of final per-axis size at t=0
     var scale_x   = mix(target_scale_x * start_scale_factor, target_scale_x, t);
     var scale_y   = mix(target_scale_y * start_scale_factor, target_scale_y, t);
     var scale_z   = mix(target_scale_z * start_scale_factor, target_scale_z, t);
@@ -278,19 +289,22 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     out_scale_opacity[tri_idx]          = vec4<f32>(scale_x, scale_y, scale_z, opacity);
 
 
-    // --- Set Spherical Harmonics (normal-based color) ---
-    // Convert normal [-1,1] to RGB [0,1]
-    let rgb = (normal * 0.5) + vec3<f32>(0.5);
-    
+    // --- Per-frame lighting and SH color ---
+    // Current oriented normal is the rotated +Z
+    let cur_normal = normalize(rotate_vec_by_quat(vec3<f32>(0.0, 0.0, 1.0), rotation_out));
+    let L = normalize(params.light_dir);
+    let ndotl = clamp(dot(cur_normal, L), 0.0, 1.0);
+    let base = params.base_color;
+    // Simple Lambert-style shading with no ambient: darker when away from light
+    let rgb = base * ndotl;
 
-    // Apply spherical harmonics formula: sh = (rgb - 0.5) / 0.2821
-    let sh_coeff_r = (rgb.r - 0.5) / 0.2821;
-    let sh_coeff_g = (rgb.g - 0.5) / 0.2821;
-    let sh_coeff_b = (rgb.b - 0.5) / 0.2821;
+    // SH DC coefficient encodes color via Y00 = 0.2821
+    let sh_coeff_r = rgb.r / 0.2821;
+    let sh_coeff_g = rgb.g / 0.2821;
+    let sh_coeff_b = rgb.b / 0.2821;
     
     var sh: SphericalHarmonic;
     
-
     // Initialize all coefficients to zero
     for (var i = 0; i < 48; i = i + 1) {
         sh.coefficients[i] = 0.0;
