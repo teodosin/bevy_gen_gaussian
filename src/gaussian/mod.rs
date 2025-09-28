@@ -1,9 +1,13 @@
 // Gaussian module - pure functions for creating and manipulating Gaussian clouds
+
+pub mod mass;
 pub mod cpu_mesh_to_gaussians;
 pub mod gpu_mesh_to_gaussians;
 pub mod settings;
 
+
 // Re-export the main public API
+pub use mass::*;
 pub use cpu_mesh_to_gaussians::*;
 pub use gpu_mesh_to_gaussians::*;
 pub use settings::*;
@@ -204,35 +208,6 @@ fn process_new_meshes_for_gpu_conversion(
         };
 
         let cloud_handle = clouds.add(cloud_asset);
-
-
-        // IMPORTANT
-        // GPU conversion is currently not functional, because bevy_gaussian_splatting's
-        // Radix sort implementation is broken. Rayon CPU sorting is used instead, and 
-        // that requires the transforms of the splats to be known by the CPU entity. Since
-        // we don't read back these transforms from our compute shader, the Rayon sorter
-        // can't sort them. The following block sets the positions manually on the CPU and
-        // is only here to demonstrate this issue. Once Radix sorting is working, the data
-        // won't have to leave the GPU.
-        // if let Some(cloud) = clouds.get_mut(&cloud_handle) {
-        //     for (i, tri) in indices.chunks(3).enumerate() {
-        //         if tri.len() < 3 { break; }
-        //         let p0  = pos[tri[0] as usize];
-        //         let p1  = pos[tri[1] as usize];
-        //         let p2  = pos[tri[2] as usize];
-        //         let centroid = [
-        //             (p0[0] + p1[0] + p2[0]) / 3.0,
-        //             (p0[1] + p1[1] + p2[1]) / 3.0,
-        //             (p0[2] + p1[2] + p2[2]) / 3.0,
-        //         ];
-        //         if let Some(pv) = cloud.position_visibility.get_mut(i) {
-        //             pv.position = centroid;
-        //             pv.visibility = 1.0;
-        //         }
-        //     }
-        // }
-        // --- end demonstration ---
-
 
 
         // Spawn the cloud entity

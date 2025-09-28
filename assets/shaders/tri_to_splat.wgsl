@@ -208,7 +208,7 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Simple scale based on triangle edge lengths (target thickness kept small)
     let target_scale_x = length(v0) * 0.33;
     let target_scale_y = length(v1) * 0.33;
-    let target_scale_z = 0.05; // Surfel thickness - TODO: Use the MeshToGaussian component for this
+    let target_scale_z = 0.01; // Surfel thickness - TODO: Use the MeshToGaussian component for this
 
     // --- Time-based interpolation from origin singularity ---
     // Looping time base: 5-second cycle
@@ -230,7 +230,7 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var pos_out   = mix(start_pos, center, t);
 
     // Start visible with a modest base size boost (~30%) and non-zero opacity
-    let start_scale_factor = 2.6; // 130% of final per-axis size at t=0
+    let start_scale_factor = 3.6; // 130% of final per-axis size at t=0
     var scale_x   = mix(target_scale_x * start_scale_factor, target_scale_x, t);
     var scale_y   = mix(target_scale_y * start_scale_factor, target_scale_y, t);
     var scale_z   = mix(target_scale_z * start_scale_factor, target_scale_z, t);

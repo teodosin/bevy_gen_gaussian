@@ -19,7 +19,7 @@ use bevy::ui::Val::Px;
 use bevy_gen_gaussian::{GenGaussianPlugin, MeshToGaussian, MeshToGaussianMode, TriToSplatParams};
 
 /// Path to the mesh asset to convert
-const MESH_PATH: &str = "scenes/monkey.glb";
+const MESH_PATH: &str = "scenes/FusedFace_LOD3.glb";
 
 
 
