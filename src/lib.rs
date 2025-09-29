@@ -2,6 +2,8 @@ pub mod gaussian;
 pub mod sdf_module;
 pub mod debug;
 
+pub mod beat_cauldron;
+
 use bevy::prelude::*;
 use bevy_gaussian_splatting::GaussianSplattingPlugin;
 
