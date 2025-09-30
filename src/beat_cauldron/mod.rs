@@ -45,6 +45,11 @@ pub struct BeatCauldronSettings {
     pub color_gamma: f32,
     pub color_min_luminance: f32,
     pub color_pattern_exponent: f32,
+    pub color_density_strength: f32,
+    pub color_density_bias: f32,
+    pub color_mask_threshold: f32,
+    pub color_mask_sharpness: f32,
+    pub color_final_contrast_strength: f32,
     pub min_scale: Vec3,
     pub max_scale: Vec3,
     pub scale_multiplier: f32,
@@ -84,12 +89,17 @@ impl Default for BeatCauldronSettings {
             color_saturation_variation: 0.28,
             color_lightness_base: 0.46,
             color_lightness_variation: 0.22,
-            color_contrast_strength: 6.5,
-            color_brightness_boost: -0.1,
-            color_whiteness_strength: 0.2,
-            color_gamma: 1.35,
-            color_min_luminance: 0.02,
-            color_pattern_exponent: 1.4,
+            color_contrast_strength: 6.0,
+            color_brightness_boost: -0.42,
+            color_whiteness_strength: 0.0,
+            color_gamma: 2.0,
+            color_min_luminance: 0.0,
+            color_pattern_exponent: 3.5,
+            color_density_strength: 4.5,
+            color_density_bias: 0.0,
+            color_mask_threshold: 0.45,
+            color_mask_sharpness: 3.25,
+            color_final_contrast_strength: 14.0,
             min_scale: Vec3::new(
                 0.32 * cell_spacing.x,
                 0.32 * cell_spacing.y,
@@ -100,7 +110,7 @@ impl Default for BeatCauldronSettings {
                 0.55 * cell_spacing.y,
                 0.68 * average_spacing,
             ),
-            scale_multiplier: 1000.0,
+            scale_multiplier: 2000.0,
             opacity_base: 0.9,
             opacity_variation: 0.18,
             camera_distance: 600.0,
@@ -249,6 +259,38 @@ fn spawn_gaussian_grid(
     mut clouds: ResMut<Assets<PlanarGaussian3d>>,
     settings: Res<BeatCauldronSettings>,
 ) {
+    use noise::{NoiseFn, Perlin};
+
+    // --- Noise crate config (inline; move to settings later if you want) ---
+    let color_noise_seed: u32 = 1337;
+    let color_noise_freq: Vec2 = Vec2::splat(0.02);
+    let color_noise_offset: Vec2 = Vec2::new(13.7, -9.1);
+    let noise_octaves: u32 = 4;
+    let noise_lacunarity: f32 = 2.0;
+    let noise_gain: f32 = 0.5;
+    let brightness_gamma: f32 = 1.0;
+
+    // Build a single Perlin generator once.
+    let perlin = Perlin::new(color_noise_seed);
+
+    // Simple Perlin fBm returning [0,1].
+    #[inline]
+    fn fbm2_perlin(perlin: &Perlin, p: Vec2, octaves: u32, lacunarity: f32, gain: f32) -> f32 {
+        let mut amp = 0.5;
+        let mut sum = 0.0f32;
+        let mut norm = 0.0f32;
+        let mut freq = 1.0f32;
+        for _ in 0..octaves {
+            let n = perlin.get([ (p.x * freq) as f64, (p.y * freq) as f64 ]) as f32; // ~[-1,1]
+            sum += amp * n;
+            norm += amp;
+            freq *= lacunarity;
+            amp *= gain;
+        }
+        let v = if norm > 0.0 { sum / norm } else { 0.0 };
+        ((v * 0.5) + 0.5).clamp(0.0, 1.0) // → [0,1]
+    }
+
     let total_splats = settings.total_splats();
 
     let mut positions: Vec<PositionVisibility> = Vec::with_capacity(total_splats);
@@ -265,49 +307,21 @@ fn spawn_gaussian_grid(
             let world_x = x as f32 * settings.cell_spacing.x - half_extents.x;
             let world_y = half_extents.y - y as f32 * settings.cell_spacing.y;
 
+            // Keep your existing samples for other properties
             let base_noise = settings.sample_noise(grid_position, Vec2::ZERO);
             let color_noise = settings.sample_noise(grid_position, Vec2::new(37.0, 91.0));
             let secondary_noise = settings.sample_noise(grid_position, Vec2::new(-73.0, 19.0));
             let altitude_noise = settings.sample_noise(grid_position, Vec2::new(17.0, -53.0));
 
-            let hue = (settings.color_hue_base
-                + (base_noise * 2.0 - 1.0) * settings.color_hue_variation)
-                .rem_euclid(360.0);
-            let saturation = (settings.color_saturation_base
-                + (color_noise * 2.0 - 1.0) * settings.color_saturation_variation)
-                .clamp(0.0, 1.0);
-            let lightness = (settings.color_lightness_base
-                + (secondary_noise * 2.0 - 1.0) * settings.color_lightness_variation)
-                .clamp(0.0, 1.0);
-
-            let color = Color::hsla(hue, saturation, lightness, 1.0);
-            let linear = color.to_linear().to_vec4();
-            let mut contrasted = Vec3::new(linear.x, linear.y, linear.z);
-            contrasted = (contrasted - Vec3::splat(0.5)) * settings.color_contrast_strength
-                + Vec3::splat(0.5);
-            contrasted = contrasted.clamp(Vec3::ZERO, Vec3::ONE);
-
-            let gamma = settings.color_gamma.max(0.01);
-            let gamma_adjusted = contrasted.powf(gamma);
-
-            let whiteness_strength = settings
-                .color_whiteness_strength
-                .clamp(0.0, 1.0);
-            let whitened = gamma_adjusted.lerp(Vec3::splat(1.0), whiteness_strength);
-            let boosted = (whitened + Vec3::splat(settings.color_brightness_boost))
-                .clamp(Vec3::ZERO, Vec3::ONE);
-
-            let pattern_noise = settings.sample_noise(grid_position, Vec2::new(211.0, -157.0));
-            let pattern_exponent = settings.color_pattern_exponent.max(0.01);
-            let pattern = pattern_noise.powf(pattern_exponent);
-            let min_luminance = settings.color_min_luminance.clamp(0.0, 1.0);
-            let luminance_scale = min_luminance + (1.0 - min_luminance) * pattern;
-            let final_rgb = boosted * luminance_scale;
+            // --- simplified color via Noise crate: grayscale brightness in [0,1] ---
+            let p = grid_position * color_noise_freq + color_noise_offset;
+            let mut brightness = fbm2_perlin(&perlin, p, noise_octaves, noise_lacunarity, noise_gain);
+            brightness = brightness.powf(brightness_gamma.max(0.01));
 
             let mut sh = SphericalHarmonicCoefficients::default();
-            sh.coefficients[0] = final_rgb.x;
-            sh.coefficients[1] = final_rgb.y;
-            sh.coefficients[2] = final_rgb.z;
+            sh.coefficients[0] = brightness;
+            sh.coefficients[1] = brightness;
+            sh.coefficients[2] = brightness;
 
             let altitude = settings.grid_plane_z
                 + (altitude_noise * 2.0 - 1.0) * settings.altitude_variation;
@@ -360,6 +374,8 @@ fn spawn_gaussian_grid(
         Name::new("WorldViewGaussianCloud"),
     ));
 }
+
+
 
 fn smooth_value_noise(point: Vec2) -> f32 {
     let cell = point.floor();
